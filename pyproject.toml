@@ -1,22 +1,23 @@
 # Package ######################################################################
-
 [build-system]
-requires = ["setuptools >= 61.0.0"]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
-[project]
+[tool.poetry]
 name = "minigrid"
+version = "0.1.0"  # Add your project version here
 description = "Minimalistic gridworld reinforcement learning environments."
+authors = ["Farama Foundation <contact@farama.org>"]
+license = "MIT License"
 readme = "README.md"
-requires-python = ">= 3.7"
-authors = [{ name = "Farama Foundation", email = "contact@farama.org" }]
-license = { text = "MIT License" }
-keywords = ["Memory, Environment, Agent, RL, Gymnasium"]
+homepage = "https://farama.org"
+repository = "https://minigrid.farama.org/"
+documentation = "https://minigrid.farama.org/"
+keywords = ["Memory", "Environment", "Agent", "RL", "Gymnasium"]
 classifiers = [
-    "Development Status :: 4 - Beta",  # change to `5 - Production/Stable` when ready
+    "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -24,33 +25,24 @@ classifiers = [
     'Intended Audience :: Science/Research',
     'Topic :: Scientific/Engineering :: Artificial Intelligence',
 ]
-dependencies = [
-    "numpy>=1.18.0",
-    "gymnasium>=0.28.1",
-    "pygame>=2.4.0",
-]
-dynamic = ["version"]
 
-[project.optional-dependencies]
-testing = [
-    "pytest>=7.0.1",
-    "pytest-mock>=3.10.0",
-    "matplotlib>=3.0"
-]
-wfc = [
-    "networkx",
-    "imageio>=2.31.1",
-]
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.24.4"
+gymnasium = "^0.29.1"
+pygame = "^2.4.0"
 
-[project.urls]
-Homepage = "https://farama.org"
-Repository = "https://minigrid.farama.org/"
-Documentation = "https://minigrid.farama.org/"
-"Bug Report" = "https://github.com/Farama-Foundation/Minigrid/issues"
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.1"
+pytest-mock = "^3.10.0"
+matplotlib = "^3.0"
+networkx = "*"
+imageio = "^2.31.1"
 
-[project.entry-points."gymnasium.envs"]
+[tool.poetry.plugins."gymnasium.envs"]
 __root__ = "minigrid.__init__:register_minigrid_envs"
 
+[tool.poetry.scripts]  # If you have any scripts to include
 [tool.setuptools]
 include-package-data = true
 
@@ -82,7 +74,7 @@ exclude = [
 strict = []
 
 typeCheckingMode = "basic"
-pythonVersion = "3.7"
+pythonVersion = "3.8"
 typeshedPath = "typeshed"
 enableTypeIgnoreComments = true
 
