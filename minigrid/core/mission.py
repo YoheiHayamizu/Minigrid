@@ -7,7 +7,9 @@ from gymnasium.utils import seeding
 
 
 def check_if_no_duplicate(duplicate_list: list) -> bool:
-    """Check if given list contains any duplicates"""
+    """
+    Check if given list contains any duplicates
+    """
     return len(set(duplicate_list)) == len(duplicate_list)
 
 

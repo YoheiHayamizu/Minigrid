@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Optional
 
 import numpy as np
 
@@ -9,6 +9,7 @@ from minigrid.core.constants import (
     COLORS,
     IDX_TO_COLOR,
     IDX_TO_OBJECT,
+    STATE_TO_IDX,
     OBJECT_TO_IDX,
 )
 from minigrid.utils.rendering import (
@@ -25,54 +26,90 @@ Point = Tuple[int, int]
 
 
 class WorldObj:
-
     """
     Base class for grid world objects
+
+    Attributes:
+    ----------
+    type : str
+        String representing the type of this object
+    color : str
+        String representing the color of this object
+    state : int
+        State of the object, can be any of the STATE_TO_IDX values
+    indicator : int
+        Object indicator variable (i.e. this agent is me)
+    contains : Optional[WorldObj]
+        Object contained inside this object, if any
     """
 
     def __init__(self, type: str, color: str):
         assert type in OBJECT_TO_IDX, type
         assert color in COLOR_TO_IDX, color
-        self.type = type
-        self.color = color
+        self._type = type
+        self._color = color
+        self._state = OBJECT_TO_IDX["empty"]
+        self._indicator = OBJECT_TO_IDX["empty"]
+
         self.contains = None
 
-        # Initial position of the object
-        self.init_pos: Point | None = None
+    @property
+    def type(self) -> str:
+        return self._type
 
-        # Current position of the object
-        self.cur_pos: Point | None = None
+    @property
+    def color(self) -> str:
+        return self._color
+
+    @color.setter
+    def color(self, color: str):
+        self._color = color
 
     def can_overlap(self) -> bool:
-        """Can the agent overlap with this?"""
+        """
+        Can the agent overlap with this?
+        """
         return False
 
     def can_pickup(self) -> bool:
-        """Can the agent pick this up?"""
+        """
+        Can the agent pick this up?
+        """
         return False
 
     def can_contain(self) -> bool:
-        """Can this contain another object?"""
+        """
+        Can this contain another object?
+        """
         return False
 
     def see_behind(self) -> bool:
-        """Can the agent see behind this object?"""
+        """
+        Can the agent see behind this object?
+        """
         return True
 
     def toggle(self, env: MiniGridEnv, pos: tuple[int, int]) -> bool:
-        """Method to trigger/toggle an action this object performs"""
+        """
+        Method to trigger/toggle an action this object performs
+        """
         return False
 
     def encode(self) -> tuple[int, int, int]:
-        """Encode the a description of this object as a 3-tuple of integers"""
+        """
+        Encode the a description of this object as a 3-tuple of integers
+        """
         return (OBJECT_TO_IDX[self.type], COLOR_TO_IDX[self.color], 0)
 
     @staticmethod
-    def decode(type_idx: int, color_idx: int, state: int) -> WorldObj | None:
-        """Create an object from a 3-tuple state description"""
+    def decode(type_idx: int, color_idx: int, state_idx: int) -> Optional[WorldObj]:
+        """
+        Create an object from a 3-tuple state description
+        """
 
         obj_type = IDX_TO_OBJECT[type_idx]
         color = IDX_TO_COLOR[color_idx]
+        state = STATE_TO_IDX[state_idx]
 
         if obj_type == "empty" or obj_type == "unseen" or obj_type == "agent":
             return None
@@ -103,7 +140,9 @@ class WorldObj:
         return v
 
     def render(self, r: np.ndarray) -> np.ndarray:
-        """Draw this object with the given renderer"""
+        """
+        Draw this object with the given renderer
+        """
         raise NotImplementedError
 
 
@@ -136,6 +175,10 @@ class Floor(WorldObj):
 
 
 class Lava(WorldObj):
+    """
+    Lava tile the agent can fall into
+    """
+
     def __init__(self):
         super().__init__("lava", "red")
 
@@ -159,6 +202,10 @@ class Lava(WorldObj):
 
 
 class Wall(WorldObj):
+    """
+    Wall that the agent can't walk through
+    """
+
     def __init__(self, color: str = "grey"):
         super().__init__("wall", color)
 
@@ -170,6 +217,10 @@ class Wall(WorldObj):
 
 
 class Door(WorldObj):
+    """
+    A door that can be opened with the corresponding colored key.
+    """
+
     def __init__(self, color: str, is_open: bool = False, is_locked: bool = False):
         super().__init__("door", color)
         self.is_open = is_open
@@ -238,6 +289,10 @@ class Door(WorldObj):
 
 
 class Key(WorldObj):
+    """
+    Colored key that can unlock doors and be picked up by the agent
+    """
+
     def __init__(self, color: str = "blue"):
         super().__init__("key", color)
 
@@ -260,6 +315,10 @@ class Key(WorldObj):
 
 
 class Ball(WorldObj):
+    """
+    Ball object that the agent can pick up
+    """
+
     def __init__(self, color="blue"):
         super().__init__("ball", color)
 
@@ -271,7 +330,11 @@ class Ball(WorldObj):
 
 
 class Box(WorldObj):
-    def __init__(self, color, contains: WorldObj | None = None):
+    """
+    Box object that the agent can pick up or toggle
+    """
+
+    def __init__(self, color, contains: Optional[WorldObj] = None):
         super().__init__("box", color)
         self.contains = contains
 

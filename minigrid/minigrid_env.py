@@ -3,12 +3,12 @@ from __future__ import annotations
 import hashlib
 import math
 from abc import abstractmethod
-from typing import Any, Iterable, SupportsFloat, TypeVar
-
-import gymnasium as gym
 import numpy as np
 import pygame
 import pygame.freetype
+from typing import Any, Iterable, SupportsFloat, TypeVar
+
+import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.core import ActType, ObsType
 
@@ -121,7 +121,7 @@ class MiniGridEnv(gym.Env):
         *,
         seed: int | None = None,
         options: dict[str, Any] | None = None,
-    ) -> tuple[ObsType, dict[str, Any]]:
+    ) -> tuple[ObsType, dict[str, Any]]:  # type: ignore
         super().reset(seed=seed)
 
         # Reinitialize episode-specific variables
@@ -518,8 +518,8 @@ class MiniGridEnv(gym.Env):
         return obs_cell is not None and obs_cell.type == world_cell.type
 
     def step(
-        self, action: ActType
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        self, action: ActType  # type: ignore
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:  # type: ignore
         self.step_count += 1
 
         reward = 0

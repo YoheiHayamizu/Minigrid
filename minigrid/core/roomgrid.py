@@ -102,7 +102,9 @@ class RoomGrid(MiniGridEnv):
         )
 
     def room_from_pos(self, x: int, y: int) -> Room:
-        """Get the room a given position maps to"""
+        """
+        Get the room a given position maps to
+        """
 
         assert x >= 0
         assert y >= 0
