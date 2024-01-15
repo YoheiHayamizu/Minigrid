@@ -9,7 +9,7 @@ from minigrid.core.constants import (
     COLORS,
     IDX_TO_COLOR,
     IDX_TO_OBJECT,
-    STATE_TO_IDX,
+    IDX_TO_STATE,
     OBJECT_TO_IDX,
 )
 from minigrid.utils.rendering import (
@@ -109,7 +109,7 @@ class WorldObj:
 
         obj_type = IDX_TO_OBJECT[type_idx]
         color = IDX_TO_COLOR[color_idx]
-        state = STATE_TO_IDX[state_idx]
+        state = IDX_TO_STATE[state_idx]
 
         if obj_type == "empty" or obj_type == "unseen" or obj_type == "agent":
             return None

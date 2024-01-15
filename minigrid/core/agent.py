@@ -62,7 +62,7 @@ class Agent(WorldObj):
         Get the direction vector for the agent, pointing in the direction
         of forward movement.
         """
-        assert (0 <= self.dir < 4,), f"Invalid direction: {self.dir} is not within range(0, 4)"
+        assert (0 <= self.dir < 4), f"Invalid direction: {self.dir} is not within range(0, 4)"
         return DIR_TO_VEC[self.dir]
 
     @property

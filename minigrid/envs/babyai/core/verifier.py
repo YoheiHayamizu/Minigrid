@@ -231,7 +231,7 @@ class ActionInstr(Instr, ABC):
         if not use_done_actions:
             return self.verify_action(action)
 
-        if action == self.env.actions.done:
+        if action == self.env.unwrapped.actions.done:
             if self.lastStepMatch:
                 return "success"
             return "failure"
@@ -267,7 +267,7 @@ class OpenInstr(ActionInstr):
 
     def verify_action(self, action):
         # Only verify when the toggle action is performed
-        if action != self.env.actions.toggle:
+        if action != self.env.unwrapped.actions.toggle:
             return "continue"
 
         # Get the contents of the cell in front of the agent
@@ -344,7 +344,7 @@ class PickupInstr(ActionInstr):
         self.preCarrying = self.env.carrying
 
         # Only verify when the pickup action is performed
-        if action != self.env.actions.pickup:
+        if action != self.env.unwrapped.actions.pickup:
             return "continue"
 
         for obj in self.desc.obj_set:
@@ -413,11 +413,11 @@ class PutNextInstr(ActionInstr):
 
         # In strict mode, picking up the wrong object fails
         if self.strict:
-            if action == self.env.actions.pickup and self.env.carrying:
+            if action == self.env.unwrapped.actions.pickup and self.env.carrying:
                 return "failure"
 
         # Only verify when the drop action is performed
-        if action != self.env.actions.drop:
+        if action != self.env.unwrapped.actions.drop:
             return "continue"
 
         for obj_a in self.desc_move.obj_set:
@@ -556,7 +556,7 @@ class AndInstr(SeqInstr):
         if self.b_done != "success":
             self.b_done = self.instr_b.verify(action)
 
-        if use_done_actions and action is self.env.actions.done:
+        if use_done_actions and action is self.env.unwrapped.actions.done:
             if self.a_done == "failure" and self.b_done == "failure":
                 return "failure"
 

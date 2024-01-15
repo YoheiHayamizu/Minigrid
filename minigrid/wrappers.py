@@ -108,7 +108,7 @@ class ActionBonus(gym.Wrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
 
         env = self.unwrapped
-        tup = (tuple(env.agent_pos), env.agent_dir, action)
+        tup = (tuple(env.unwrapped.agent_pos), env.unwrapped.agent_dir, action)
 
         # Get the count for this (s,a) pair
         pre_count = 0
@@ -327,7 +327,7 @@ class RGBImgObsWrapper(ObservationWrapper):
         )
 
     def observation(self, obs):
-        rgb_img = self.get_frame(
+        rgb_img = self.unwrapped.get_frame(
             highlight=self.unwrapped.highlight, tile_size=self.tile_size
         )
 
@@ -376,7 +376,7 @@ class RGBImgPartialObsWrapper(ObservationWrapper):
         )
 
     def observation(self, obs):
-        rgb_img_partial = self.get_frame(tile_size=self.tile_size, agent_pov=True)
+        rgb_img_partial = self.unwrapped.get_frame(tile_size=self.tile_size, agent_pov=True)
 
         return {**obs, "image": rgb_img_partial}
 
@@ -405,7 +405,7 @@ class FullyObsWrapper(ObservationWrapper):
         new_image_space = spaces.Box(
             low=0,
             high=255,
-            shape=(self.env.width, self.env.height, 3),  # number of cells
+            shape=(self.env.unwrapped.width, self.env.unwrapped.height, 3),  # number of cells
             dtype="uint8",
         )
 
@@ -415,9 +415,9 @@ class FullyObsWrapper(ObservationWrapper):
 
     def observation(self, obs):
         env = self.unwrapped
-        full_grid = env.grid.encode()
-        full_grid[env.agent_pos[0]][env.agent_pos[1]] = np.array(
-            [OBJECT_TO_IDX["agent"], COLOR_TO_IDX["red"], env.agent_dir]
+        full_grid = env.unwrapped.grid.encode()
+        full_grid[env.unwrapped.agent_pos[0]][env.unwrapped.agent_pos[1]] = np.array(
+            [OBJECT_TO_IDX["agent"], COLOR_TO_IDX["red"], env.unwrapped.agent_dir]
         )
 
         return {**obs, "image": full_grid}
@@ -699,21 +699,21 @@ class DirectionObsWrapper(ObservationWrapper):
 
         if not self.goal_position:
             self.goal_position = [
-                x for x, y in enumerate(self.grid.grid) if isinstance(y, Goal)
+                x for x, y in enumerate(self.unwrapped.grid.grid) if isinstance(y, Goal)
             ]
             # in case there are multiple goals , needs to be handled for other env types
             if len(self.goal_position) >= 1:
                 self.goal_position = (
-                    int(self.goal_position[0] / self.height),
-                    self.goal_position[0] % self.width,
+                    int(self.goal_position[0] / self.unwrapped.height),
+                    self.goal_position[0] % self.unwrapped.width,
                 )
 
         return self.observation(obs), info
 
     def observation(self, obs):
         slope = np.divide(
-            self.goal_position[1] - self.agent_pos[1],
-            self.goal_position[0] - self.agent_pos[0],
+            self.goal_position[1] - self.unwrapped.agent_pos[1],
+            self.goal_position[0] - self.unwrapped.agent_pos[0],
         )
 
         if self.type == "angle":
@@ -749,7 +749,7 @@ class SymbolicObsWrapper(ObservationWrapper):
         new_image_space = spaces.Box(
             low=0,
             high=max(OBJECT_TO_IDX.values()),
-            shape=(self.env.width, self.env.height, 3),  # number of cells
+            shape=(self.env.unwrapped.width, self.env.unwrapped.height, 3),  # number of cells
             dtype="uint8",
         )
         self.observation_space = spaces.Dict(
@@ -758,10 +758,10 @@ class SymbolicObsWrapper(ObservationWrapper):
 
     def observation(self, obs):
         objects = np.array(
-            [OBJECT_TO_IDX[o.type] if o is not None else -1 for o in self.grid.grid]
+            [OBJECT_TO_IDX[o.type] if o is not None else -1 for o in self.unwrapped.grid.grid]
         )
-        agent_pos = self.env.agent_pos
-        ncol, nrow = self.width, self.height
+        agent_pos = self.env.unwrapped.agent_pos
+        ncol, nrow = self.unwrapped.width, self.unwrapped.height
         grid = np.mgrid[:ncol, :nrow]
         _objects = np.transpose(objects.reshape(1, nrow, ncol), (0, 2, 1))
 
@@ -852,9 +852,9 @@ class NoDeath(Wrapper):
     def step(self, action):
         # In Dynamic-Obstacles, obstacles move after the agent moves,
         # so we need to check for collision before self.env.step()
-        front_cell = self.grid.get(*self.front_pos)
+        front_cell = self.unwrapped.grid.get(*self.unwrapped.front_pos)
         going_to_death = (
-            action == self.actions.forward
+            action == self.unwrapped.actions.forward
             and front_cell is not None
             and front_cell.type in self.no_death_types
         )
@@ -863,7 +863,7 @@ class NoDeath(Wrapper):
 
         # We also check if the agent stays in death cells (e.g., lava)
         # without moving
-        current_cell = self.grid.get(*self.agent_pos)
+        current_cell = self.unwrapped.grid.get(*self.unwrapped.agent_pos)
         in_death = current_cell is not None and current_cell.type in self.no_death_types
 
         if terminated and (going_to_death or in_death):
