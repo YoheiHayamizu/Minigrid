@@ -115,11 +115,11 @@ class ObjDesc:
 
         self.obj_poss = []
 
-        agent_room = env.room_from_pos(*env.agent_pos)
+        agent_room = env.unwrapped.room_from_pos(*env.unwrapped.agent_pos)
 
-        for i in range(env.grid.width):
-            for j in range(env.grid.height):
-                cell = env.grid.get(i, j)
+        for i in range(env.unwrapped.grid.width):
+            for j in range(env.unwrapped.grid.height):
+                cell = env.unwrapped.grid.get(i, j)
                 if cell is None:
                     continue
 
@@ -145,7 +145,7 @@ class ObjDesc:
                         continue
 
                     # Direction from the agent to the object
-                    v = (i - env.agent_pos[0], j - env.agent_pos[1])
+                    v = (i - env.unwrapped.agent_pos[0], j - env.unwrapped.agent_pos[1])
 
                     # (d1, d2) is an oriented orthonormal basis
                     d1 = DIR_TO_VEC[env.agent_dir]
