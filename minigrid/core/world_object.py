@@ -90,6 +90,12 @@ class WorldObj:
         """
         return True
 
+    # def toggle(self, env: MiniGridEnv, pos: tuple[int, int]) -> bool:
+    #     """
+    #     Method to trigger/toggle an action this object performs
+    #     """
+    #     return False
+
     def toggle(self, env: MiniGridEnv, agent: 'Agent', pos: tuple[int, int]) -> bool:
         """
         Method to trigger/toggle an action this object performs
@@ -234,6 +240,18 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
+    # def toggle(self, env: 'MiniGridEnv', pos: Tuple[int, int]) -> bool:
+    #     # If the player has the right key to open the door
+    #     if self.is_locked:
+    #         if isinstance(env.carrying, Key) and env.carrying.color == self.color:
+    #             self.is_locked = False
+    #             self.is_open = True
+    #             return True
+    #         return False
+
+    #     self.is_open = not self.is_open
+    #     return True
+
     def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: Tuple[int, int]) -> bool:
         # If the player has the right key to open the door
         if self.is_locked:
@@ -351,6 +369,11 @@ class Box(WorldObj):
 
         # Horizontal slit
         fill_coords(img, point_in_rect(0.16, 0.84, 0.47, 0.53), c)
+
+    # def toggle(self, env: 'MiniGridEnv', pos: Tuple[int, int]) -> bool:
+    #     # Replace the box by its contents
+    #     env.grid.set(pos[0], pos[1], self.contains)
+    #     return True
 
     def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: Tuple[int, int]) -> bool:
         # Replace the box by its contents

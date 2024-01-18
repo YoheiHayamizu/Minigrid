@@ -78,13 +78,26 @@ class Agent(WorldObj):
         self.carrying: Optional[WorldObj] = None
         self.terminated = False
 
-    def reset(self, mission: str = 'maximize reward'):
+    def reset(self):
         """
         Reset the agent before environment episode.
         """
-        self.mission = mission
         self.pos = (-1, -1)
         self.dir = -1
+
+    @property
+    def mission(self) -> str:
+        """
+        Get the mission string for the agent.
+        """
+        return self._mission
+
+    @mission.setter
+    def mission(self, mission: str):
+        """
+        Set the mission string for the agent.
+        """
+        self._mission = mission
 
     @property
     def carrying(self) -> WorldObj:
@@ -123,8 +136,7 @@ class Agent(WorldObj):
         """
         Get the position of the cell that is right in front of the agent.
         """
-        dx, dy = DIR_TO_VEC[self.dir]
-        return (self.pos[0] + dx, self.pos[1] + dy)
+        return self.pos + self.dir_vec
 
     def get_view_coords(self, i, j) -> Tuple[int, int]:
         """
@@ -187,7 +199,8 @@ class Agent(WorldObj):
         and return the corresponding coordinates.
         """
         vx, vy = self.get_view_coords(x, y)
-        if not (0 <= vx < self.view_size) and (0 <= vy < self.view_size):
+
+        if not (0 <= vx < self.view_size) or not (0 <= vy < self.view_size):
             return None
 
         return vx, vy
@@ -207,7 +220,9 @@ class Agent(WorldObj):
             return False
         vx, vy = coordinates
 
-        obs_grid, _ = self.gen_obs_grid(grid)
+        obs = self.gen_obs(grid)
+
+        obs_grid, _ = Grid.decode(obs["image"])
         obs_cell = obs_grid.get(vx, vy)
         world_cell = grid.get(x, y)
 
