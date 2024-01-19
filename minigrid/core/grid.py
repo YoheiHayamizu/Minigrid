@@ -35,13 +35,15 @@ class Grid:
         self.grid: list[Optional[WorldObj]] = [None] * (width * height)
 
     @staticmethod
-    def from_encoding(array: np.ndarray) -> Grid:
+    def from_grid(other: Grid) -> Grid:
         """
-        Create a grid world from an encoding
+        Create a grid world from an grid list
         """
-        width, height, _ = array.shape
+        width, height = other.width, other.height
         grid = Grid(width, height)
-        grid, _ = grid.decode(array)
+        for i in range(width):
+            for j in range(height):
+                grid.set(i, j, other.get(i, j))
         return grid
 
     def __contains__(self, key: Any) -> bool:
@@ -72,6 +74,9 @@ class Grid:
         return deepcopy(self)
 
     def set(self, i: int, j: int, v: Optional[WorldObj]):
+        """
+        Set a world object at the given coordinates.
+        """
         assert (
             0 <= i < self.width
         ), f"column index {i} outside of grid of width {self.width}"
@@ -93,6 +98,9 @@ class Grid:
         length: Optional[int] = None,
         obj_type: Callable[[], WorldObj] = Wall,
     ):
+        """
+        Create a horizontal wall.
+        """
         if length is None:
             length = self.width - x
         for i in range(0, length):
@@ -105,12 +113,18 @@ class Grid:
         length: Optional[int] = None,
         obj_type: Callable[[], WorldObj] = Wall,
     ):
+        """
+        Create a vertical wall.
+        """
         if length is None:
             length = self.height - y
         for j in range(0, length):
             self.set(x, y + j, obj_type())
 
     def wall_rect(self, x: int, y: int, w: int, h: int):
+        """
+        Create a walled rectangle.
+        """
         self.horz_wall(x, y, w)
         self.horz_wall(x, y + h - 1, w)
         self.vert_wall(x, y, h)
@@ -118,7 +132,7 @@ class Grid:
 
     def rotate_left(self) -> Grid:
         """
-        Rotate the grid to the left (counter-clockwise)
+        Rotate the grid to the left (counter-clockwise).
         """
 
         grid = Grid(self.height, self.width)
@@ -132,7 +146,7 @@ class Grid:
 
     def slice(self, topX: int, topY: int, width: int, height: int) -> Grid:
         """
-        Get a subset of the grid
+        Get a subset of the grid.
         """
 
         grid = Grid(width, height)
@@ -160,7 +174,7 @@ class Grid:
         subdivs: int = 3,
     ) -> np.ndarray:
         """
-        Render a tile and cache the result
+        Render a tile and cache the result.
         """
         # Hash map lookup key for the cache
         key: tuple[Any, ...] = (highlight, tile_size)

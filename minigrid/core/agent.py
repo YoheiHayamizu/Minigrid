@@ -10,7 +10,7 @@ from gymnasium.core import ActType, ObsType
 from minigrid.core.mission import MissionSpace
 from minigrid.core.actions import Actions
 from minigrid.core.grid import Grid
-from minigrid.core.constants import COLORS, IDX_TO_COLOR, DIR_TO_VEC
+from minigrid.core.constants import COLORS, IDX_TO_COLOR, DIR_TO_VEC, OBJECT_TO_IDX, COLOR_TO_IDX
 from minigrid.core.world_object import WorldObj
 from minigrid.utils.rendering import (
     fill_coords,
@@ -26,7 +26,7 @@ class Agent(WorldObj):
 
     def __init__(
         self,
-        index: int,
+        id: int,
         mission_space: MissionSpace,
         view_size: int = 7,
         see_through_walls: bool = False,
@@ -34,8 +34,8 @@ class Agent(WorldObj):
         """
         Parameters
         ----------
-        index : int
-            The index of the agent in the environment
+        id : int
+            Unique ID for the agent in the environment
         mission_space : MissionSpace
             The mission space for the agent
         view_size : int
@@ -43,9 +43,9 @@ class Agent(WorldObj):
         see_through_walls : bool
             Whether the agent can see through walls
         """
-        color = IDX_TO_COLOR[index % (max(IDX_TO_COLOR) + 1)]
+        color = IDX_TO_COLOR[id % (max(IDX_TO_COLOR) + 1)]
         super().__init__('agent', color)
-        self.index = index
+        self.id = id
 
         # Number of cells (width and height) in the agent view
         assert view_size % 2 == 1, "view_size must be odd"
@@ -69,53 +69,24 @@ class Agent(WorldObj):
         })
         self.see_through_walls = see_through_walls
 
-        # Current position and direction of the agent
+        # Current agent state
+        self.mission: str = None
+        self.terminated = False
+        self.carrying: Optional[WorldObj] = None
         self.pos: Tuple[int, int] = None
         self.dir: int = None
-
-        # Current mission and carrying
-        self.mission: str = None
-        self.carrying: Optional[WorldObj] = None
-        self.terminated = False
 
     def reset(self):
         """
         Reset the agent before environment episode.
         """
+        self.terminated = False
+        self.carrying = None
         self.pos = (-1, -1)
         self.dir = -1
 
     @property
-    def mission(self) -> str:
-        """
-        Get the mission string for the agent.
-        """
-        return self._mission
-
-    @mission.setter
-    def mission(self, mission: str):
-        """
-        Set the mission string for the agent.
-        """
-        self._mission = mission
-
-    @property
-    def carrying(self) -> WorldObj:
-        """
-        Get the object that the agent is currently carrying.
-        Alias for `contains`.
-        """
-        return self.contains
-
-    @carrying.setter
-    def carrying(self, obj: WorldObj):
-        """
-        Set the object that the agent is currently carrying.
-        """
-        self.contains = obj
-
-    @property
-    def dir_vec(self) -> int:
+    def dir_vec(self) -> np.ndarray[int]:
         """
         Get the direction vector for the agent, pointing in the direction
         of forward movement.
@@ -136,7 +107,8 @@ class Agent(WorldObj):
         """
         Get the position of the cell that is right in front of the agent.
         """
-        return self.pos + self.dir_vec
+        dx, dy = self.dir_vec
+        return self.pos[0] + dx, self.pos[1] + dy
 
     def get_view_coords(self, i, j) -> Tuple[int, int]:
         """
@@ -222,6 +194,7 @@ class Agent(WorldObj):
         vx, vy = coordinates
 
         obs = self.gen_obs(grid)
+
         obs_grid, _ = Grid.decode(obs["image"])
         obs_cell = obs_grid.get(vx, vy)
         world_cell = grid.get(x, y)
@@ -289,8 +262,8 @@ class Agent(WorldObj):
 
     def encode(self):
         return (
-            self.type,  # type
-            self.color,  # color
+            OBJECT_TO_IDX[self.type],  # type
+            self.id,  # id
             self.dir,  # state
         )
 

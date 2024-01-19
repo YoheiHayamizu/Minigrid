@@ -55,6 +55,12 @@ class WorldObj:
 
         self.contains = None
 
+        # Initial position of the object
+        self.init_pos: Point | None = None
+
+        # Current position of the object
+        self.cur_pos: Point | None = None
+
     @property
     def type(self) -> str:
         return self._type
@@ -66,6 +72,14 @@ class WorldObj:
     @color.setter
     def color(self, color: str):
         self._color = color
+
+    @property
+    def state(self) -> int:
+        return self._state
+
+    @state.setter
+    def state(self, state: int):
+        self._state = state
 
     def can_overlap(self) -> bool:
         """
@@ -101,17 +115,16 @@ class WorldObj:
         """
         Encode a description of this object as a 3-tuple of integers
         """
-        return (OBJECT_TO_IDX[self.type], COLOR_TO_IDX[self.color], 0)
+        return (OBJECT_TO_IDX[self.type], COLOR_TO_IDX[self.color], self.state)
 
     @staticmethod
-    def decode(type_idx: int, color_idx: int, state_idx: int) -> Optional[WorldObj]:
+    def decode(type_idx: int, color_idx: int, state: int) -> Optional[WorldObj]:
         """
         Create an object from a 3-tuple state description
         """
 
         obj_type = IDX_TO_OBJECT[type_idx]
         color = IDX_TO_COLOR[color_idx]
-        state = IDX_TO_STATE[state_idx]
 
         if obj_type == "empty" or obj_type == "unseen" or obj_type == "agent":
             return None
@@ -228,6 +241,40 @@ class Door(WorldObj):
         self.is_open = is_open
         self.is_locked = is_locked
 
+    @property
+    def is_open(self) -> bool:
+        """
+        Whether the door is open.
+        """
+        return self.state == STATE_TO_IDX['open']
+
+    @is_open.setter
+    def is_open(self, value: bool):
+        """
+        Set the door to be open or closed.
+        """
+        if value:
+            self.state = STATE_TO_IDX['open']  # set state to open
+        elif not self.is_locked:
+            self.state = STATE_TO_IDX['closed']  # closed (unless already locked)
+
+    @property
+    def is_locked(self) -> bool:
+        """
+        Whether the door is locked.
+        """
+        return self.state == STATE_TO_IDX['locked']
+
+    @is_locked.setter
+    def is_locked(self, value: bool):
+        """
+        Set the door to be locked or unlocked.
+        """
+        if value:
+            self.state = STATE_TO_IDX['locked']  # set state to locked
+        elif not self.is_open:
+            self.state = STATE_TO_IDX['closed']  # closed (unless already open)
+
     def can_overlap(self):
         """The agent can only walk over this cell when the door is open"""
         return self.is_open
@@ -235,35 +282,16 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: Tuple[int, int]) -> bool:
+    def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: tuple[int, int]) -> bool:
         # If the player has the right key to open the door
         if self.is_locked:
-            if isinstance(env.carrying, Key) and env.carrying.color == self.color:
+            if isinstance(agent.carrying, Key) and agent.carrying.color == self.color:
                 self.is_locked = False
                 self.is_open = True
                 return True
             return False
-
         self.is_open = not self.is_open
         return True
-
-    def encode(self):
-        """Encode the a description of this object as a 3-tuple of integers"""
-
-        # State, 0: open, 1: closed, 2: locked
-        if self.is_open:
-            state = 0
-        elif self.is_locked:
-            state = 2
-        # if door is closed and unlocked
-        elif not self.is_open:
-            state = 1
-        else:
-            raise ValueError(
-                f"There is no possible state encoding for the state:\n -Door Open: {self.is_open}\n -Door Closed: {not self.is_open}\n -Door Locked: {self.is_locked}"
-            )
-
-        return (OBJECT_TO_IDX[self.type], COLOR_TO_IDX[self.color], state)
 
     def render(self, img):
         c = COLORS[self.color]
