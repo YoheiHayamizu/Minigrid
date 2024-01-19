@@ -453,7 +453,7 @@ class MiniGridEnv(gym.Env):
         """
         Check if a non-empty grid position is visible to the agent
         """
-        return self.agent.sees(x, y, self.grid)
+        return self.agent.sees(x, y, self.thing())
 
     def step(
         self, action: ActType  # type: ignore

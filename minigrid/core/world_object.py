@@ -5,12 +5,13 @@ from typing import TYPE_CHECKING, Tuple, Optional
 import numpy as np
 
 from minigrid.core.constants import (
+    OBJECT_TO_IDX,
     COLOR_TO_IDX,
+    STATE_TO_IDX,
     COLORS,
     IDX_TO_COLOR,
     IDX_TO_OBJECT,
     IDX_TO_STATE,
-    OBJECT_TO_IDX,
 )
 from minigrid.utils.rendering import (
     fill_coords,
@@ -49,8 +50,8 @@ class WorldObj:
         assert color in COLOR_TO_IDX, color
         self._type = type
         self._color = color
-        self._state = OBJECT_TO_IDX["empty"]
-        self._indicator = OBJECT_TO_IDX["empty"]
+        self._state = 0
+        self._indicator = 0
 
         self.contains = None
 
@@ -89,12 +90,6 @@ class WorldObj:
         Can the agent see behind this object?
         """
         return True
-
-    # def toggle(self, env: MiniGridEnv, pos: tuple[int, int]) -> bool:
-    #     """
-    #     Method to trigger/toggle an action this object performs
-    #     """
-    #     return False
 
     def toggle(self, env: MiniGridEnv, agent: 'Agent', pos: tuple[int, int]) -> bool:
         """
@@ -240,22 +235,10 @@ class Door(WorldObj):
     def see_behind(self):
         return self.is_open
 
-    # def toggle(self, env: 'MiniGridEnv', pos: Tuple[int, int]) -> bool:
-    #     # If the player has the right key to open the door
-    #     if self.is_locked:
-    #         if isinstance(env.carrying, Key) and env.carrying.color == self.color:
-    #             self.is_locked = False
-    #             self.is_open = True
-    #             return True
-    #         return False
-
-    #     self.is_open = not self.is_open
-    #     return True
-
     def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: Tuple[int, int]) -> bool:
         # If the player has the right key to open the door
         if self.is_locked:
-            if isinstance(agent.carrying, Key) and agent.carrying.color == self.color:
+            if isinstance(env.carrying, Key) and env.carrying.color == self.color:
                 self.is_locked = False
                 self.is_open = True
                 return True
@@ -369,11 +352,6 @@ class Box(WorldObj):
 
         # Horizontal slit
         fill_coords(img, point_in_rect(0.16, 0.84, 0.47, 0.53), c)
-
-    # def toggle(self, env: 'MiniGridEnv', pos: Tuple[int, int]) -> bool:
-    #     # Replace the box by its contents
-    #     env.grid.set(pos[0], pos[1], self.contains)
-    #     return True
 
     def toggle(self, env: 'MiniGridEnv', agent: 'Agent', pos: Tuple[int, int]) -> bool:
         # Replace the box by its contents

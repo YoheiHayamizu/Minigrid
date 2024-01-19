@@ -144,6 +144,7 @@ class Agent(WorldObj):
         agent's partially observable view (sub-grid). Note that the resulting
         coordinates may be negative or outside of the agent's view size.
         """
+
         ax, ay = self.pos
         dx, dy = self.dir_vec
         rx, ry = self.right_vec
@@ -221,7 +222,6 @@ class Agent(WorldObj):
         vx, vy = coordinates
 
         obs = self.gen_obs(grid)
-
         obs_grid, _ = Grid.decode(obs["image"])
         obs_cell = obs_grid.get(vx, vy)
         world_cell = grid.get(x, y)
