@@ -162,15 +162,30 @@ class FetchEnv(MiniGridEnv):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
-        if self.carrying:
-            if (
-                self.carrying.color == self.targetColor
-                and self.carrying.type == self.targetType
-            ):
-                reward = self._reward()
-                terminated = True
-            else:
-                reward = 0
-                terminated = True
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
+
+        for agent in self.agents.values():
+            if agent.carrying:
+                if (
+                    agent.carrying.color == self.targetColor
+                    and agent.carrying.type == self.targetType
+                ):
+                    reward[agent.id] = self._reward()
+                    terminated[agent.id] = True
+                else:
+                    reward[agent.id] = 0
+                    terminated[agent.id] = True
+
+        info = {}
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

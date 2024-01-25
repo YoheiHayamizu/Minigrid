@@ -162,9 +162,7 @@ class LockedRoomEnv(MiniGridEnv):
         self.grid.set(*keyPos, Key(lockedRoom.color))
 
         # Randomize the player start position and orientation
-        self.agent_pos = self.place_agent(
-            top=(lWallIdx, 0), size=(rWallIdx - lWallIdx, height)
-        )
+        self.place_agent(top=(lWallIdx, 0), size=(rWallIdx - lWallIdx, height))
 
         # Generate the mission string
         self.mission = (

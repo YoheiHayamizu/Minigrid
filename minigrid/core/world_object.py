@@ -24,8 +24,6 @@ if TYPE_CHECKING:
     from minigrid.core.agent import Agent
     from minigrid.minigrid_env import MiniGridEnv
 
-Point = Tuple[int, int]
-
 
 class WorldObj:
     """
@@ -56,10 +54,10 @@ class WorldObj:
         self.contains = None
 
         # Initial position of the object
-        self.init_pos: Point | None = None
+        self.init_pos: Tuple[int, int] | None = None
 
         # Current position of the object
-        self.cur_pos: Point | None = None
+        self.cur_pos: Tuple[int, int] | None = None
 
     @property
     def type(self) -> str:

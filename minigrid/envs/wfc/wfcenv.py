@@ -161,10 +161,11 @@ class WFCEnv(MiniGridEnv):
         )
 
         # Decode to minigrid and set variables
-        self.agent_dir = self._rand_int(0, 4)
-        self.agent_pos = next(
-            zip(*np.nonzero(grid_array[:, :, 0] == OBJECT_TO_IDX["agent"]))
-        )
+        for agent in self.agents.values():
+            agent.dir = self._rand_int(0, 4)
+            agent.pos = next(
+                zip(*np.nonzero(grid_array[:, :, 0] == OBJECT_TO_IDX["agent"]))
+            )
         self.grid, _vismask = Grid.decode(grid_array)
         self.mission = self._gen_mission()
 

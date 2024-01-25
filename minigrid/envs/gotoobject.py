@@ -145,17 +145,32 @@ class GoToObjectEnv(MiniGridEnv):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
-        ax, ay = self.agent_pos
-        tx, ty = self.target_pos
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
 
-        # Toggle/pickup action terminates the episode
-        if action == self.actions.toggle:
-            terminated = True
+        for agent in self.agents.values():
+            ax, ay = agent.pos
+            tx, ty = self.target_pos
 
-        # Reward performing the done action next to the target object
-        if action == self.actions.done:
-            if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
-                reward = self._reward()
-            terminated = True
+            # Toggle/pickup action terminates the episode
+            if action[agent.id] == self.actions.toggle:
+                terminated[agent.id] = True
+
+            # Reward performing the done action next to the target object
+            if action[agent.id] == self.actions.done:
+                if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
+                    reward[agent.id] = self._reward()
+                terminated[agent.id] = True
+
+        info = {}
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

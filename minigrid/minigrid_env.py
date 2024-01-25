@@ -17,7 +17,7 @@ from minigrid.core.agent import Agent
 from minigrid.core.constants import COLOR_NAMES, OBJECT_TO_IDX, TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import Point, WorldObj
+from minigrid.core.world_object import WorldObj
 
 T = TypeVar("T")
 AgentID = int
@@ -30,7 +30,7 @@ class MiniGridEnv(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "render_fps": 10,
+        "render_fps": 20,
     }
 
     def __init__(
@@ -48,6 +48,7 @@ class MiniGridEnv(gym.Env):
         highlight: bool = True,
         tile_size: int = TILE_PIXELS,
         agent_pov: bool = False,
+        is_competitive_env: bool = False,
     ):
         """
         MiniGrid environment initialization
@@ -69,6 +70,7 @@ class MiniGridEnv(gym.Env):
         """
         # Initialize mission
         self.mission = mission_space.sample()
+        self.is_competitive_env = is_competitive_env
 
         # Initialize grid
         width, height = (grid_size, grid_size) if grid_size else (width, height)
@@ -126,65 +128,6 @@ class MiniGridEnv(gym.Env):
         self.window = None
         self.clock = None
 
-        #############################
-        # Deprecated attributes
-        #############################
-        # self.agent_pos: np.ndarray | tuple[int, int] = None
-        # self.agent_dir: int = None
-        # self.agent_view_size = agent_view_size
-        # self.see_through_walls = see_through_walls
-        # self.carrying = None
-
-    # @property
-    # def agent_pos(self):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     return self.agents[0].pos
-
-    # @agent_pos.setter
-    # def agent_pos(self, value):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     self.agents[0].pos = value
-
-    # @property
-    # def agent_dir(self):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     return self.agents[0].dir
-
-    # @agent_dir.setter
-    # def agent_dir(self, value):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     self.agents[0].dir = value
-
-    # @property
-    # def agent_view_size(self):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     return self.agents[0].view_size
-
-    # @agent_view_size.setter
-    # def agent_view_size(self, value):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     self.agents[0].view_size = value
-
-    # @property
-    # def see_through_walls(self):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     return self.agents[0].see_through_walls
-
-    # @see_through_walls.setter
-    # def see_through_walls(self, value):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     self.agents[0].see_through_walls = value
-
-    # @property
-    # def carrying(self):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     return self.agents[0].carrying
-
-    # @carrying.setter
-    # def carrying(self, value):
-    #     assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-    #     self.agents[0].carrying = value
-
     def reset(
         self,
         *,
@@ -216,9 +159,6 @@ class MiniGridEnv(gym.Env):
         for agent in self.agents.values():
             start_cell = self.grid.get(*agent.pos)
             assert start_cell is None or start_cell.can_overlap()
-
-        # # Item picked up, being carried, initially nogrid_with_agents
-        # self.carrying = None
 
         # Step count since episode start
         self.step_count = 0
@@ -261,7 +201,8 @@ class MiniGridEnv(gym.Env):
         the object and the second one for the color.
         """
         for agent in self.agents.values():
-            assert (agent.pos is not None and agent.dir is not None), "The environment hasn't been `reset` therefore the `agent_pos`, `agent_dir` or `grid` are unknown."
+            if agent.pos == (-1, -1) or agent.dir == -1 or self.grid is None:
+                raise ValueError("The environment hasn't been `reset` therefore the `agent_pos`, `agent_dir` or `grid` are unknown.")
 
         # Map of object types to short string
         OBJECT_TO_STR = {
@@ -387,7 +328,7 @@ class MiniGridEnv(gym.Env):
     def place_obj(
         self,
         obj: WorldObj | None,
-        top: Point = None,
+        top: tuple[int, int] = None,
         size: tuple[int, int] = None,
         reject_fn=None,
         max_tries=math.inf,
@@ -476,24 +417,6 @@ class MiniGridEnv(gym.Env):
             if rand_dir:
                 agent.dir = self._rand_int(0, 4)
 
-    @property
-    def dir_vec(self):
-        assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-        return self.agents[0].dir_vec
-
-    @property
-    def right_vec(self):
-        assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-        return self.agents[0].right_vec
-
-    @property
-    def front_pos(self):
-        """
-        Get the position of the cell that is right in front of the agent
-        """
-        assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-        return self.agents[0].front_pos
-
     def in_view(self, x, y):
         """
         check if a grid position is visible to the agent
@@ -519,9 +442,18 @@ class MiniGridEnv(gym.Env):
 
         Returns:
             obs (Dict[AgentID, ObsType]): Agent observations.
-            reward (Dict[AgentID, SupportsFloat]): Amount of reward returned after previous action for each agent.
-            terminated (Dict[AgentID, bool]): Whether the episode has ended for each agent (success or failure).
-            truncated (Dict[AgentID, bool]): Whether the episode has ended due to the time limit for each agent (max steps reached).
+            reward (Dict[AgentID, SupportsFloat]):
+                Amount of reward returned after previous action for each agent.
+                The reward from environment is the sum of rewards of all agents. Access individual rewards by `info["rewards"]`.
+            terminated (Dict[AgentID, bool]):
+                Whether the episode has ended for each agent (success or failure).
+                    The episode ends if any one of the following conditions is met:
+                    1. The agent reaches the goal when `is_competitive_env` is True.
+                    2. The agent reaches the goal when `is_competitive_env` is False.
+                Access individual terminations by `info["terminated"]`.
+            truncated (Dict[AgentID, bool]):
+                Whether the episode has ended due to the time limit for each agent (max steps reached).
+                Access individual truncations by `info["truncated"]`.
         """
         self.step_count += 1
 
@@ -605,11 +537,21 @@ class MiniGridEnv(gym.Env):
             self.render()
 
         obs = self.gen_obs()
-        truncated = (self.step_count >= self.max_steps)
-        truncated = {agent.id: truncated for agent in self.agents.values()}
+
+        truncated = {agent.id: (self.step_count >= self.max_steps) for agent in self.agents.values()}
         terminated = {agent.id: agent.terminated for agent in self.agents.values()}
 
-        return obs, reward, terminated, truncated, {}
+        info = {}
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
+
+        return obs, reward, terminated, truncated, info
 
     def grid_with_agents(self):
         """
@@ -620,18 +562,11 @@ class MiniGridEnv(gym.Env):
             grid.set(*agent.pos, agent)
         return grid
 
-    # def gen_obs_grid(self, agent_view_size: int = 7) -> tuple[Grid, np.ndarray[bool]]:
-    #     tmp_view = self.agent.view_size
-    #     self.agent.view_size = agent_view_size
-    #     obs_grid, vis_mask = self.agent.gen_obs_grid(self.grid_with_agents())
-    #     self.agent.view_size = tmp_view
-    #     return obs_grid, vis_mask
-
     def gen_obs(self) -> Dict[AgentID, ObsType]:  # type: ignore
         """
         Generate observations for each agent (partially observable, low-resolution encoding).
         """
-        return {agent.id: agent.gen_obs(self.grid) for agent in self.agents.values()}
+        return {agent.id: agent.gen_obs(self.grid_with_agents()) for agent in self.agents.values()}
 
     def get_pov_render(self, tile_size):
         """

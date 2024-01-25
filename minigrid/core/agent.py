@@ -71,10 +71,11 @@ class Agent(WorldObj):
 
         # Current agent state
         self.mission: str = None
+        self.pos: Tuple[int, int] = (-1, -1)
+        self.dir: int = -1
+        self.color: str = color
         self.terminated = False
         self.carrying: Optional[WorldObj] = None
-        self.pos: Tuple[int, int] = None
-        self.dir: int = None
 
     def reset(self):
         """

@@ -108,19 +108,18 @@ class LavaGapEnv(MiniGridEnv):
         self.grid.wall_rect(0, 0, width, height)
 
         # Place the agent in the top-left corner
-        self.agent_pos = np.array((1, 1))
-        self.agent_dir = 0
+        for agent in self.agents.values():
+            agent.pos = (1, 1)
+            agent.dir = 0
 
         # Place a goal square in the bottom-right corner
-        self.goal_pos = np.array((width - 2, height - 2))
+        self.goal_pos = (width - 2, height - 2)
         self.put_obj(Goal(), *self.goal_pos)
 
         # Generate and store random gap position
-        self.gap_pos = np.array(
-            (
-                self._rand_int(2, width - 2),
-                self._rand_int(1, height - 1),
-            )
+        self.gap_pos = (
+            self._rand_int(2, width - 2),
+            self._rand_int(1, height - 1),
         )
 
         # Place the obstacle wall

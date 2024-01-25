@@ -129,9 +129,23 @@ class KeyCorridorEnv(RoomGrid):
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
 
-        if action == self.actions.pickup:
-            if self.carrying and self.carrying == self.obj:
-                reward = self._reward()
-                terminated = True
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
+
+        for agent in self.agents.values():
+            if action == self.actions.pickup:
+                if agent.carrying and agent.carrying == self.obj:
+                    reward[agent.id] = self._reward()
+                    terminated[agent.id] = True
+
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

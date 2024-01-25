@@ -1,7 +1,9 @@
 from __future__ import annotations
+from typing import Optional, TYPE_CHECKING, Tuple, Optional, Iterable, Union, List
 
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
+from minigrid.core.agent import Agent
 from minigrid.core.world_object import Goal, Lava
 from minigrid.minigrid_env import MiniGridEnv
 
@@ -66,14 +68,19 @@ class DistShiftEnv(MiniGridEnv):
         self,
         width=9,
         height=7,
-        agent_start_pos=(1, 1),
-        agent_start_dir=0,
+        agents: int | Iterable[Agent] = 1,
+        agents_start_pos: List[Tuple[int, int]] = [(1, 1), ],
+        agents_start_dir: List[int] = [0, ],
         strip2_row=2,
         max_steps: int | None = None,
         **kwargs,
     ):
-        self.agent_start_pos = agent_start_pos
-        self.agent_start_dir = agent_start_dir
+        num_agents = agents if isinstance(agents, int) else len(agents)
+        if agents_start_pos is not None:
+            assert len(agents_start_pos) == num_agents, "Number of agents and starting positions must match"
+            assert len(agents_start_dir) == num_agents, "Number of agents and starting directions must match"
+        self.agents_start_pos = agents_start_pos
+        self.agents_start_dir = agents_start_dir
         self.goal_pos = (width - 2, 1)
         self.strip2_row = strip2_row
 
@@ -112,9 +119,10 @@ class DistShiftEnv(MiniGridEnv):
             self.grid.set(3 + i, self.strip2_row, Lava())
 
         # Place the agent
-        if self.agent_start_pos is not None:
-            self.agent_pos = self.agent_start_pos
-            self.agent_dir = self.agent_start_dir
+        if self.agents_start_pos is not None:
+            for i in range(len(self.agents_start_pos)):
+                self.agents[i].pos = self.agents_start_pos[i]
+                self.agents[i].dir = self.agents_start_dir[i]
         else:
             self.place_agent()
 

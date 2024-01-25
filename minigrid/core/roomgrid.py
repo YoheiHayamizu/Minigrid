@@ -13,11 +13,12 @@ def reject_next_to(env: MiniGridEnv, pos: tuple[int, int]):
     Function to filter out object positions that are right next to
     the agent's starting point
     """
-
-    sx, sy = env.agent_pos
     x, y = pos
-    d = abs(sx - x) + abs(sy - y)
-    return d < 2
+    for agent in env.agents.values():
+        sx, sy = agent.pos
+        if abs(sx - x) + abs(sy - y) <= 1:
+            return True
+    return False
 
 
 class Room:
@@ -171,14 +172,15 @@ class RoomGrid(MiniGridEnv):
                     room.neighbors[3] = self.room_grid[j - 1][i]
                     room.door_pos[3] = room.neighbors[3].door_pos[1]
 
-        # The agent starts in the middle, facing right
-        self.agent_pos = np.array(
-            (
-                (self.num_cols // 2) * (self.room_size - 1) + (self.room_size // 2),
-                (self.num_rows // 2) * (self.room_size - 1) + (self.room_size // 2),
+        # The agents start in the middle, facing right
+        for agent in self.agents.values():
+            agent.pos = np.array(
+                (
+                    (self.num_cols // 2) * (self.room_size - 1) + (self.room_size // 2),
+                    (self.num_rows // 2) * (self.room_size - 1) + (self.room_size // 2),
+                )
             )
-        )
-        self.agent_dir = 0
+            agent.dir = 0
 
     def place_in_room(
         self, i: int, j: int, obj: WorldObj
@@ -324,16 +326,16 @@ class RoomGrid(MiniGridEnv):
         if j is None:
             j = self._rand_int(0, self.num_rows)
 
-        room = self.room_grid[j][i]
+        room: Room = self.room_grid[j][i]
 
         # Find a position that is not right in front of an object
         while True:
             super().place_agent(room.top, room.size, rand_dir, max_tries=1000)
-            front_cell = self.grid.get(*self.front_pos)
-            if front_cell is None or front_cell.type == "wall":
+            fwd_cells = []
+            for agent in self.agents.values():
+                fwd_cells.append(self.grid.get(*agent.front_pos))
+            if all([fwd_cell is None or fwd_cell.type == "wall" for fwd_cell in fwd_cells]):
                 break
-
-        return self.agent_pos
 
     def connect_all(
         self, door_colors: list[str] = COLOR_NAMES, max_itrs: int = 5000
@@ -343,7 +345,7 @@ class RoomGrid(MiniGridEnv):
         starting position
         """
 
-        start_room = self.room_from_pos(*self.agent_pos)
+        start_room = self.room_from_pos(*self.agents[0].pos)
 
         added_doors = []
 

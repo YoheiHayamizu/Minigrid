@@ -174,27 +174,43 @@ class PutNearEnv(MiniGridEnv):
         )
 
     def step(self, action):
-        preCarrying = self.carrying
+        preCarrying = {}
+        for agent in self.agents.values():
+            preCarrying[agent.id] = agent.carrying
 
         obs, reward, terminated, truncated, info = super().step(action)
 
-        u, v = self.dir_vec
-        ox, oy = (self.agent_pos[0] + u, self.agent_pos[1] + v)
-        tx, ty = self.target_pos
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
 
-        # If we picked up the wrong object, terminate the episode
-        if action == self.actions.pickup and self.carrying:
-            if (
-                self.carrying.type != self.move_type
-                or self.carrying.color != self.moveColor
-            ):
-                terminated = True
+        for agent in self.agents.values():
+            u, v = agent.dir_vec
+            ox, oy = (agent.pos[0] + u, agent.pos[1] + v)
+            tx, ty = self.target_pos
 
-        # If successfully dropping an object near the target
-        if action == self.actions.drop and preCarrying:
-            if self.grid.get(ox, oy) is preCarrying:
-                if abs(ox - tx) <= 1 and abs(oy - ty) <= 1:
-                    reward = self._reward()
-            terminated = True
+            # If we picked up the wrong object, terminate the episode
+            if action[agent.id] == self.actions.pickup and agent.carrying:
+                if (
+                    agent.carrying.type != self.move_type
+                    or agent.carrying.color != self.moveColor
+                ):
+                    terminated[agent.id] = True
+
+            # If successfully dropping an object near the target
+            if action[agent.id] == self.actions.drop and preCarrying[agent.id]:
+                if self.grid.get(ox, oy) is preCarrying[agent.id]:
+                    if abs(ox - tx) <= 1 and abs(oy - ty) <= 1:
+                        reward[agent.id] = self._reward()
+                terminated[agent.id] = True
+
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

@@ -1,13 +1,18 @@
 from __future__ import annotations
+from typing import Optional, TYPE_CHECKING, Tuple, Optional, Iterable, Union, List
 
 from operator import add
 
+from gymnasium import spaces
 from gymnasium.spaces import Discrete
+from gymnasium.core import ActType, ObsType
 
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
-from minigrid.core.world_object import Ball, Goal
+from minigrid.core.agent import Agent
+from minigrid.core.world_object import Ball, Goal, WorldObj
 from minigrid.minigrid_env import MiniGridEnv
+AgentID = int
 
 
 class DynamicObstaclesEnv(MiniGridEnv):
@@ -72,14 +77,19 @@ class DynamicObstaclesEnv(MiniGridEnv):
     def __init__(
         self,
         size=8,
-        agent_start_pos=(1, 1),
-        agent_start_dir=0,
-        n_obstacles=4,
+        agents: int | Iterable[Agent] = 1,
+        agents_start_pos: List[Tuple[int, int]] = [(1, 1), ],
+        agents_start_dir: List[int] = [0, ],
+        n_obstacles: int = 4,
         max_steps: int | None = None,
         **kwargs,
     ):
-        self.agent_start_pos = agent_start_pos
-        self.agent_start_dir = agent_start_dir
+        num_agents = agents if isinstance(agents, int) else len(agents)
+        if agents_start_pos is not None:
+            assert len(agents_start_pos) == num_agents, "Number of agents and starting positions must match"
+            assert len(agents_start_dir) == num_agents, "Number of agents and starting directions must match"
+        self.agents_start_pos = agents_start_pos
+        self.agents_start_dir = agents_start_dir
 
         # Reduce obstacles if there are too many
         if n_obstacles <= size / 2 + 1:
@@ -100,9 +110,17 @@ class DynamicObstaclesEnv(MiniGridEnv):
             max_steps=max_steps,
             **kwargs,
         )
-        # Allow only 3 actions permitted: left, right, forward
-        self.action_space = Discrete(self.actions.forward + 1)
+
+        for agent in self.agents.values():
+            # Allow only 3 actions permitted: left, right, forward
+            agent.action_space = Discrete(self.actions.forward + 1)
+
+        # Update action space and reward range
         self.reward_range = (-1, 1)
+        self.action_space = spaces.Dict({
+            agent.id: agent.action_space
+            for agent in self.agents.values()
+        })
 
     @staticmethod
     def _gen_mission():
@@ -119,28 +137,33 @@ class DynamicObstaclesEnv(MiniGridEnv):
         self.grid.set(width - 2, height - 2, Goal())
 
         # Place the agent
-        if self.agent_start_pos is not None:
-            self.agent_pos = self.agent_start_pos
-            self.agent_dir = self.agent_start_dir
+        if self.agents_start_pos is not None:
+            for i in range(len(self.agents_start_pos)):
+                self.agents[i].pos = self.agents_start_pos[i]
+                self.agents[i].dir = self.agents_start_dir[i]
         else:
             self.place_agent()
 
         # Place obstacles
-        self.obstacles = []
+        self.obstacles: list[WorldObj] = []
         for i_obst in range(self.n_obstacles):
             self.obstacles.append(Ball())
             self.place_obj(self.obstacles[i_obst], max_tries=100)
 
         self.mission = "get to the green goal square"
 
-    def step(self, action):
-        # Invalid action
-        if action >= self.action_space.n:
-            action = 0
+    def step(self, actions):
+        for agent_idx, a in actions.items():
+            if a >= self.action_space[agent_idx].n:
+                actions[agent_idx] = 0
 
         # Check if there is an obstacle in front of the agent
-        front_cell = self.grid.get(*self.front_pos)
-        not_clear = front_cell and front_cell.type != "goal"
+        not_clear = {}
+        for agent in self.agents.values():
+            # Get the contents of the cell in front of the agent
+            fwd_pos = agent.front_pos
+            fwd_cell = self.grid.get(*fwd_pos)
+            not_clear[agent.id] = fwd_cell and fwd_cell.type != "goal"
 
         # Update obstacle positions
         for i_obst in range(len(self.obstacles)):
@@ -151,17 +174,31 @@ class DynamicObstaclesEnv(MiniGridEnv):
                 self.place_obj(
                     self.obstacles[i_obst], top=top, size=(3, 3), max_tries=100
                 )
+                assert old_pos is not None
                 self.grid.set(old_pos[0], old_pos[1], None)
             except Exception:
                 pass
 
         # Update the agent's position/direction
-        obs, reward, terminated, truncated, info = super().step(action)
+        obs, reward, terminated, truncated, info = super().step(actions)
+
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
 
         # If the agent tried to walk over an obstacle or wall
-        if action == self.actions.forward and not_clear:
-            reward = -1
-            terminated = True
-            return obs, reward, terminated, truncated, info
+        for agent in self.agents.values():
+            if actions == self.actions.forward and not_clear[agent.id]:
+                reward[agent.id] = -1
+                terminated[agent.id] = True
+
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

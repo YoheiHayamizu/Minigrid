@@ -127,8 +127,9 @@ class MemoryEnv(MiniGridEnv):
             self.grid.set(hallway_end + 2, j, Wall())
 
         # Fix the player's start position and orientation
-        self.agent_pos = np.array((self._rand_int(1, hallway_end + 1), height // 2))
-        self.agent_dir = 0
+        for agent in self.agents.values():
+            agent.pos = (self._rand_int(1, hallway_end + 1), height // 2)
+            agent.dir = 0
 
         # Place objects
         start_room_obj = self._rand_elem([Key, Ball])
@@ -151,15 +152,30 @@ class MemoryEnv(MiniGridEnv):
         self.mission = "go to the matching object at the end of the hallway"
 
     def step(self, action):
-        if action == Actions.pickup:
-            action = Actions.toggle
+        for agent in self.agents.values():
+            if action[agent.id] == Actions.pickup:
+                action[agent.id] = Actions.toggle
         obs, reward, terminated, truncated, info = super().step(action)
 
-        if tuple(self.agent_pos) == self.success_pos:
-            reward = self._reward()
-            terminated = True
-        if tuple(self.agent_pos) == self.failure_pos:
-            reward = 0
-            terminated = True
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
+
+        for agent in self.agents.values():
+            if agent.pos == self.success_pos:
+                reward[agent.id] = self._reward()
+                terminated[agent.id] = True
+            if agent.pos == self.failure_pos:
+                reward[agent.id] = 0
+                terminated[agent.id] = True
+
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info

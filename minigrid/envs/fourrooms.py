@@ -57,8 +57,11 @@ class FourRoomsEnv(MiniGridEnv):
 
     """
 
-    def __init__(self, agent_pos=None, goal_pos=None, max_steps=100, **kwargs):
-        self._agent_default_pos = agent_pos
+    def __init__(self, agents=1, agents_pos=None, goal_pos=None, max_steps=100, **kwargs):
+        num_agents = agents if isinstance(agents, int) else len(agents)
+        if agents_pos is not None:
+            assert len(agents_pos) == num_agents, "Number of agents and starting positions must match"
+        self._agents_default_pos = agents_pos
         self._goal_default_pos = goal_pos
 
         self.size = 19
@@ -111,12 +114,11 @@ class FourRoomsEnv(MiniGridEnv):
                     pos = (self._rand_int(xL + 1, xR), yB)
                     self.grid.set(*pos, None)
 
-        # Randomize the player start position and orientation
-        if self._agent_default_pos is not None:
-            self.agent_pos = self._agent_default_pos
-            self.grid.set(*self._agent_default_pos, None)
-            # assuming random start direction
-            self.agent_dir = self._rand_int(0, 4)
+        # Randomize the agents start position and orientation
+        if self._agents_default_pos is not None:
+            for i in range(len(self._agents_default_pos)):
+                self.agents[i].pos = self._agents_default_pos[i]
+                self.agents[i].dir = self._rand_int(0, 4)
         else:
             self.place_agent()
 
