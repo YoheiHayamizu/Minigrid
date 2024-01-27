@@ -188,7 +188,7 @@ class DynamicObstaclesEnv(MiniGridEnv):
 
         # If the agent tried to walk over an obstacle or wall
         for agent in self.agents.values():
-            if actions == self.actions.forward and not_clear[agent.id]:
+            if actions[agent.id] == self.actions.forward and not_clear[agent.id]:
                 reward[agent.id] = -1
                 terminated[agent.id] = True
 
