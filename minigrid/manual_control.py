@@ -73,9 +73,11 @@ class ManualControl:
             "left shift": Actions.drop,
             "enter": Actions.done,
         }
+        actions = self.env.unwrapped.action_space.sample()
         if key in key_to_action.keys():
-            action = key_to_action[key]
-            self.step(action)
+            actions[0] = key_to_action[key]
+            # Agent 0 is a player. Other agents take random actions.
+            self.step(actions)
         else:
             print(key)
 

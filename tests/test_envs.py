@@ -120,7 +120,7 @@ def test_render_modes(spec):
 
 @pytest.mark.parametrize("env_id", ["MiniGrid-DoorKey-6x6-v0"])
 def test_agent_sees_method(env_id):
-    env = gym.make(env_id)
+    env = gym.make(env_id, agents=1)
     goal_pos = (env.unwrapped.grid.width - 2, env.unwrapped.grid.height - 2)
 
     # Test the env.agent_sees() function
@@ -132,7 +132,7 @@ def test_agent_sees_method(env_id):
         action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
 
-        grid, _ = Grid.decode(obs["image"])
+        grid, _ = Grid.decode(obs[0]["image"])
         goal_visible = ("green", "goal") in grid
 
         agent_sees_goal = env.unwrapped.agent_sees(*goal_pos)
@@ -156,7 +156,7 @@ def test_max_steps_argument(env_spec):
     env.reset()
     step_count = 0
     while True:
-        _, _, terminated, truncated, _ = env.step(4)
+        _, _, terminated, truncated, _ = env.step({0: 4})
         step_count += 1
         if truncated:
             assert step_count == max_steps

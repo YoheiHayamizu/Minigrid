@@ -93,18 +93,18 @@ def test_position_bonus_wrapper(env_id):
     for _ in range(10):
         wrapped_env.reset()
         for _ in range(5):
-            wrapped_env.step(action_forward)
+            wrapped_env.step({0: action_forward})
 
     # Turn lef 3 times (check that actions don't influence bonus)
     for _ in range(3):
-        _, wrapped_rew, _, _, _ = wrapped_env.step(action_left)
+        _, wrapped_rew, _, _, _ = wrapped_env.step({0: action_left})
 
     env.reset()
     for _ in range(5):
-        env.step(action_forward)
+        env.step({0: action_forward})
     # Turn right 3 times
     for _ in range(3):
-        _, rew, _, _, _ = env.step(action_right)
+        _, rew, _, _, _ = env.step({0: action_right})
 
     expected_bonus_reward = rew + 1 / math.sqrt(13)
 
@@ -116,7 +116,7 @@ def test_action_bonus_wrapper(env_id):
     env = gym.make(env_id)
     wrapped_env = ActionBonus(gym.make(env_id))
 
-    action = Actions.forward
+    action = {0: Actions.forward}
 
     for _ in range(10):
         wrapped_env.reset()
@@ -142,10 +142,11 @@ def test_dict_observation_space_wrapper(env_spec):
     env = DictObservationSpaceWrapper(env)
     env.reset()
     mission = env.unwrapped.mission
-    obs, _, _, _, _ = env.step(0)
-    assert env.string_to_indices(mission) == [
-        value for value in obs["mission"] if value != 0
-    ]
+    obs, _, _, _, _ = env.step({0: 0})
+    for agent_id in env.unwrapped.agents.keys():
+        assert env.string_to_indices(mission) == [
+            value for value in obs[agent_id]["mission"] if value != 0
+        ]
     env.close()
 
 
@@ -177,7 +178,7 @@ def test_main_wrappers(wrapper, env_spec):
     env = wrapper(env)
     for _ in range(10):
         env.reset()
-        env.step(0)
+        env.step({0: 0})
     env.close()
 
 
@@ -201,7 +202,7 @@ def test_observation_space_wrappers(wrapper, env_spec):
     # This should not fail either
     ImgObsWrapper(env)
     env.reset()
-    env.step(0)
+    env.step({0: 0})
     env.close()
 
 
@@ -245,25 +246,27 @@ def test_agent_sees_method(wrapper):
     assert "size" in obs1
     assert obs1["size"].shape == (2,)
     assert (obs1["size"] == [5, 5]).all()
-    for key in obs2:
-        assert np.array_equal(obs1[key], obs2[key])
+    for agent in obs2:
+        for key in obs2[agent]:
+            assert np.array_equal(obs1[agent][key], obs2[agent][key])
 
-    obs1, reward1, terminated1, truncated1, _ = env1.step(0)
-    obs2, reward2, terminated2, truncated2, _ = env2.step(0)
+    obs1, reward1, terminated1, truncated1, _ = env1.step({0: 0})
+    obs2, reward2, terminated2, truncated2, _ = env2.step({0: 0})
     assert "size" in obs1
     assert obs1["size"].shape == (2,)
     assert (obs1["size"] == [5, 5]).all()
-    for key in obs2:
-        assert np.array_equal(obs1[key], obs2[key])
+    for agent in obs2:
+        for key in obs2[agent]:
+            assert np.array_equal(obs1[agent][key], obs2[agent][key])
 
 
 @pytest.mark.parametrize("view_size", [5, 7, 9])
 def test_viewsize_wrapper(view_size):
     env = gym.make("MiniGrid-Empty-5x5-v0")
     env = ViewSizeWrapper(env, agent_view_size=view_size)
-    env.reset()
-    obs, _, _, _, _ = env.step(0)
-    assert obs["image"].shape == (view_size, view_size, 3)
+    obs, _ = env.reset()
+    obs, _, _, _, _ = env.step({0: 0})
+    assert obs[0]["image"].shape == (view_size, view_size, 3)
     env.close()
 
 
@@ -274,24 +277,25 @@ def test_direction_obs_wrapper(env_id, type):
     env = DirectionObsWrapper(env, type=type)
     obs, _ = env.reset()
 
+    agent_id = 0
     slope = np.divide(
-        env.goal_position[1] - env.unwrapped.agent_pos[1],
-        env.goal_position[0] - env.unwrapped.agent_pos[0],
+        env.goal_position[agent_id][1] - env.unwrapped.agents[agent_id].pos[1],
+        env.goal_position[agent_id][0] - env.unwrapped.agents[agent_id].pos[0],
     )
     if type == "slope":
-        assert obs["goal_direction"] == slope
+        assert obs[agent_id]["goal_direction"] == slope
     elif type == "angle":
-        assert obs["goal_direction"] == np.arctan(slope)
+        assert obs[agent_id]["goal_direction"] == np.arctan(slope)
 
-    obs, _, _, _, _ = env.step(0)
+    obs, _, _, _, _ = env.step({0: 0})
     slope = np.divide(
-        env.goal_position[1] - env.unwrapped.agent_pos[1],
-        env.goal_position[0] - env.unwrapped.agent_pos[0],
+        env.goal_position[agent_id][1] - env.unwrapped.agents[agent_id].pos[1],
+        env.goal_position[agent_id][0] - env.unwrapped.agents[agent_id].pos[0],
     )
     if type == "slope":
-        assert obs["goal_direction"] == slope
+        assert obs[agent_id]["goal_direction"] == slope
     elif type == "angle":
-        assert obs["goal_direction"] == np.arctan(slope)
+        assert obs[agent_id]["goal_direction"] == np.arctan(slope)
 
     env.close()
 
@@ -302,32 +306,36 @@ def test_symbolic_obs_wrapper(env_id):
 
     env = SymbolicObsWrapper(env)
     obs, _ = env.reset(seed=123)
-    agent_pos = env.unwrapped.agent_pos
-    goal_pos = env.unwrapped.goal_pos
 
-    assert obs["image"].shape == (env.unwrapped.width, env.unwrapped.height, 3)
-    assert np.alltrue(
-        obs["image"][agent_pos[0], agent_pos[1], :]
-        == np.array([agent_pos[0], agent_pos[1], OBJECT_TO_IDX["agent"]])
-    )
-    assert np.alltrue(
-        obs["image"][goal_pos[0], goal_pos[1], :]
-        == np.array([goal_pos[0], goal_pos[1], OBJECT_TO_IDX["goal"]])
-    )
+    for agent in env.unwrapped.agents.values():
+        agent_pos = agent.pos
+        goal_pos = env.unwrapped.goal_pos
 
-    obs, _, _, _, _ = env.step(2)
-    agent_pos = env.unwrapped.agent_pos
-    goal_pos = env.unwrapped.goal_pos
+        assert obs[agent.id]["image"].shape == (env.unwrapped.width, env.unwrapped.height, 3)
+        assert np.alltrue(
+            obs[agent.id]["image"][agent_pos[0], agent_pos[1], :]
+            == np.array([agent_pos[0], agent_pos[1], OBJECT_TO_IDX["agent"]])
+        )
+        assert np.alltrue(
+            obs[agent.id]["image"][goal_pos[0], goal_pos[1], :]
+            == np.array([goal_pos[0], goal_pos[1], OBJECT_TO_IDX["goal"]])
+        )
 
-    assert obs["image"].shape == (env.unwrapped.width, env.unwrapped.height, 3)
-    assert np.alltrue(
-        obs["image"][agent_pos[0], agent_pos[1], :]
-        == np.array([agent_pos[0], agent_pos[1], OBJECT_TO_IDX["agent"]])
-    )
-    assert np.alltrue(
-        obs["image"][goal_pos[0], goal_pos[1], :]
-        == np.array([goal_pos[0], goal_pos[1], OBJECT_TO_IDX["goal"]])
-    )
+    obs, _, _, _, _ = env.step({0: 2})
+
+    for agent in env.unwrapped.agents.values():
+        agent_pos = agent.pos
+        goal_pos = env.unwrapped.goal_pos
+
+        assert obs[agent.id]["image"].shape == (env.unwrapped.width, env.unwrapped.height, 3)
+        assert np.alltrue(
+            obs[agent.id]["image"][agent_pos[0], agent_pos[1], :]
+            == np.array([agent_pos[0], agent_pos[1], OBJECT_TO_IDX["agent"]])
+        )
+        assert np.alltrue(
+            obs[agent.id]["image"][goal_pos[0], goal_pos[1], :]
+            == np.array([goal_pos[0], goal_pos[1], OBJECT_TO_IDX["goal"]])
+        )
     env.close()
 
 
@@ -337,25 +345,27 @@ def test_stochastic_action_wrapper(env_id):
     env = StochasticActionWrapper(env, prob=0.2)
     _, _ = env.reset()
     for _ in range(20):
-        _, _, _, _, _ = env.step(0)
+        _, _, _, _, _ = env.step({0: 0})
     env.close()
 
     env = gym.make(env_id)
     env = StochasticActionWrapper(env, prob=0.2, random_action=1)
     _, _ = env.reset()
     for _ in range(20):
-        _, _, _, _, _ = env.step(0)
+        _, _, _, _, _ = env.step({0: 0})
     env.close()
 
 
 def test_dict_observation_space_doesnt_clash_with_one_hot():
-    env = gym.make("MiniGrid-Empty-5x5-v0")
+    env = gym.make("MiniGrid-Empty-5x5-v0", agents=2, agents_start_pos=None, agents_start_dir=None)
     env = OneHotPartialObsWrapper(env)
     env = DictObservationSpaceWrapper(env)
     env.reset()
-    obs, _, _, _, _ = env.step(0)
-    assert obs["image"].shape == (7, 7, 20)
-    assert env.observation_space["image"].shape == (7, 7, 20)
+    obs, _, _, _, _ = env.step({0: 0, 1: 0})
+    assert obs[0]["image"].shape == (7, 7, 20)
+    # assert obs[1]["image"].shape == (7, 7, 20)
+    assert env.observation_space[0]["image"].shape == (7, 7, 20)
+    # assert env.observation_space[1]["image"].shape == (7, 7, 20)
     env.close()
 
 
@@ -364,13 +374,13 @@ def test_no_death_wrapper():
 
     env = gym.make("MiniGrid-LavaCrossingS9N1-v0")
     _, _ = env.reset(seed=2)
-    _, _, _, _, _ = env.step(1)
-    _, reward, term, *_ = env.step(2)
+    _, _, _, _, _ = env.step({0: 1})
+    _, reward, term, *_ = env.step({0: 2})
 
     env_wrap = NoDeath(env, ("lava",), death_cost)
     _, _ = env_wrap.reset(seed=2)
-    _, _, _, _, _ = env_wrap.step(1)
-    _, reward_wrap, term_wrap, *_ = env_wrap.step(2)
+    _, _, _, _, _ = env.step({0: 1})
+    _, reward_wrap, term_wrap, *_ = env_wrap.step({0: 2})
 
     assert term and not term_wrap
     assert reward_wrap == reward + death_cost
@@ -379,11 +389,11 @@ def test_no_death_wrapper():
 
     env = gym.make("MiniGrid-Dynamic-Obstacles-5x5-v0")
     _, _ = env.reset(seed=2)
-    _, reward, term, *_ = env.step(2)
+    _, reward, term, *_ = env.step({0: 2})
 
     env = NoDeath(env, ("ball",), death_cost)
     _, _ = env.reset(seed=2)
-    _, reward_wrap, term_wrap, *_ = env.step(2)
+    _, reward_wrap, term_wrap, *_ = env.step({0: 2})
 
     assert term and not term_wrap
     assert reward_wrap == reward + death_cost

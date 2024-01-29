@@ -10,8 +10,8 @@ from minigrid.manual_control import ManualControl
 from minigrid.wrappers import ImgObsWrapper, RGBImgPartialObsWrapper
 
 
-def benchmark(env_id, num_resets, num_frames):
-    env = gym.make(env_id, render_mode="rgb_array")
+def benchmark(env_id, num_resets, num_frames, agents=1):
+    env = gym.make(env_id, agents=agents, render_mode="rgb_array")
     # Benchmark env.reset
     t0 = time.time()
     for i in range(num_resets):
@@ -37,7 +37,7 @@ def benchmark(env_id, num_resets, num_frames):
     # Benchmark rendering in agent view
     t0 = time.time()
     for i in range(num_frames):
-        obs, reward, terminated, truncated, info = env.step(0)
+        obs, reward, terminated, truncated, info = env.step({0: 0})
     t1 = time.time()
     dt = t1 - t0
     agent_view_fps = num_frames / dt
@@ -80,7 +80,7 @@ def benchmark_manual_control(env_id, num_resets, num_frames, tile_size):
     # Benchmark rendering in agent view
     t0 = time.time()
     for i in range(num_frames):
-        env.step(0)
+        env.step({0: 0})
     t1 = time.time()
     dt = t1 - t0
     agent_view_fps = num_frames / dt
