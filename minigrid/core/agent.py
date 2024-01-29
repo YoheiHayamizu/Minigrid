@@ -274,16 +274,16 @@ class Agent(WorldObj):
         # - the agent's direction/orientation (acting as a compass)
         # - a textual mission string (instructions for the agent)
         obs = {"image": image, "direction": self.dir, "mission": self.mission}
-
+        # print("self.dir", self.dir)
         return obs
 
     def encode(self):
         return (
             OBJECT_TO_IDX[self.type],  # type
             COLOR_TO_IDX[self.color],  # color
-            0,  # state
+            # 0,  # state
             # self.id,  # id
-            # self.dir,  # state
+            self.dir,  # state
         )
 
     def render(self, img: np.ndarray[int]):
@@ -291,10 +291,10 @@ class Agent(WorldObj):
         Draw the agent.
         """
         c = COLORS[self.color]
+        print(self.dir)
 
         if self.dir == -1:
             return
-
         tri_fn = point_in_triangle(
             (0.12, 0.19),
             (0.87, 0.50),

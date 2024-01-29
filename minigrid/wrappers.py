@@ -10,7 +10,7 @@ import numpy as np
 from gymnasium import logger, spaces
 from gymnasium.core import ActionWrapper, ObservationWrapper, ObsType, Wrapper
 
-from minigrid.core.constants import COLOR_TO_IDX, OBJECT_TO_IDX, STATE_TO_IDX
+from minigrid.core.constants import COLOR_TO_IDX, OBJECT_TO_IDX, WOSTATE_TO_IDX, ASTATE_TO_IDX
 from minigrid.core.world_object import Goal
 
 
@@ -266,13 +266,13 @@ class OneHotPartialObsWrapper(ObservationWrapper):
         >>> env = OneHotPartialObsWrapper(env)
         >>> obs, _ = env.reset()
         >>> obs[0]["image"][0, :, :]
-        array([[0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]],
+        array([[0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+               [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0]],
               dtype=uint8)
     """
 
@@ -289,7 +289,7 @@ class OneHotPartialObsWrapper(ObservationWrapper):
         obs_shape = env.observation_space[0]["image"].shape
 
         # Number of bits per cell
-        num_bits = len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + len(STATE_TO_IDX)
+        num_bits = len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + len(ASTATE_TO_IDX)
 
         new_image_space = spaces.Box(
             low=0, high=255, shape=(obs_shape[0], obs_shape[1], num_bits), dtype="uint8"

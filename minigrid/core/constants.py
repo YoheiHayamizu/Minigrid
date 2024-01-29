@@ -37,13 +37,21 @@ OBJECT_TO_IDX = {
 IDX_TO_OBJECT = dict(zip(OBJECT_TO_IDX.values(), OBJECT_TO_IDX.keys()))
 
 # Map of state names to integers
-STATE_TO_IDX = {
+WOSTATE_TO_IDX = {
     "open": 0,
     "closed": 1,
     "locked": 2,
+    "-": 3
 }
 
-IDX_TO_STATE = dict(zip(STATE_TO_IDX.values(), STATE_TO_IDX.keys()))
+ASTATE_TO_IDX = {
+    "right": 0,
+    "down": 1,
+    "left": 2,
+    "up": 3,
+}
+IDX_TO_WOSTATE = dict(zip(WOSTATE_TO_IDX.values(), WOSTATE_TO_IDX.keys()))
+IDX_TO_ASTATE = dict(zip(ASTATE_TO_IDX.values(), ASTATE_TO_IDX.keys()))
 
 # Map of agent direction indices to vectors
 DIR_TO_VEC = [

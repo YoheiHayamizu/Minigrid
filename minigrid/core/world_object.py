@@ -7,11 +7,13 @@ import numpy as np
 from minigrid.core.constants import (
     OBJECT_TO_IDX,
     COLOR_TO_IDX,
-    STATE_TO_IDX,
+    ASTATE_TO_IDX,
+    WOSTATE_TO_IDX,
     COLORS,
     IDX_TO_COLOR,
     IDX_TO_OBJECT,
-    IDX_TO_STATE,
+    IDX_TO_ASTATE,
+    IDX_TO_WOSTATE
 )
 from minigrid.utils.rendering import (
     fill_coords,
@@ -36,7 +38,7 @@ class WorldObj:
     color : str
         String representing the color of this object
     state : int
-        State of the object, can be any of the STATE_TO_IDX values
+        State of the object, can be any of the WOSTATE_TO_IDX values
     indicator : int
         Object indicator variable (i.e. this agent is me)
     contains : Optional[WorldObj]
@@ -244,7 +246,7 @@ class Door(WorldObj):
         """
         Whether the door is open.
         """
-        return self.state == STATE_TO_IDX['open']
+        return self.state == WOSTATE_TO_IDX['open']
 
     @is_open.setter
     def is_open(self, value: bool):
@@ -252,16 +254,16 @@ class Door(WorldObj):
         Set the door to be open or closed.
         """
         if value:
-            self.state = STATE_TO_IDX['open']  # set state to open
+            self.state = WOSTATE_TO_IDX['open']  # set state to open
         elif not self.is_locked:
-            self.state = STATE_TO_IDX['closed']  # closed (unless already locked)
+            self.state = WOSTATE_TO_IDX['closed']  # closed (unless already locked)
 
     @property
     def is_locked(self) -> bool:
         """
         Whether the door is locked.
         """
-        return self.state == STATE_TO_IDX['locked']
+        return self.state == WOSTATE_TO_IDX['locked']
 
     @is_locked.setter
     def is_locked(self, value: bool):
@@ -269,9 +271,9 @@ class Door(WorldObj):
         Set the door to be locked or unlocked.
         """
         if value:
-            self.state = STATE_TO_IDX['locked']  # set state to locked
+            self.state = WOSTATE_TO_IDX['locked']  # set state to locked
         elif not self.is_open:
-            self.state = STATE_TO_IDX['closed']  # closed (unless already open)
+            self.state = WOSTATE_TO_IDX['closed']  # closed (unless already open)
 
     def can_overlap(self):
         """The agent can only walk over this cell when the door is open"""
