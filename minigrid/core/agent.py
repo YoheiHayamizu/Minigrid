@@ -50,7 +50,7 @@ class Agent(WorldObj):
         # Number of cells (width and height) in the agent view
         assert view_size % 2 == 1, "view_size must be odd"
         assert view_size >= 3, "view_size must be at least 3"
-        self.view_size = view_size
+        self._view_size = view_size
 
         # Actions are discrete integer values
         self.action_space = spaces.Discrete(len(Actions))
@@ -85,6 +85,22 @@ class Agent(WorldObj):
         self.carrying = None
         self.pos = (-1, -1)
         self.dir = -1
+
+    @property
+    def view_size(self) -> int:
+        """
+        Get the size of the agent's view.
+        """
+        return self._view_size
+
+    @view_size.setter
+    def view_size(self, value: int):
+        """
+        Set the size of the agent's view.
+        """
+        assert value % 2 == 1, "view_size must be odd"
+        assert value >= 3, "view_size must be at least 3"
+        self._view_size = value
 
     @property
     def dir_vec(self) -> np.ndarray[int]:
@@ -264,8 +280,10 @@ class Agent(WorldObj):
     def encode(self):
         return (
             OBJECT_TO_IDX[self.type],  # type
-            self.id,  # id
-            self.dir,  # state
+            COLOR_TO_IDX[self.color],  # color
+            0,  # state
+            # self.id,  # id
+            # self.dir,  # state
         )
 
     def render(self, img: np.ndarray[int]):

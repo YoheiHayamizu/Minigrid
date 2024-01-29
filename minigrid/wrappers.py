@@ -78,18 +78,18 @@ class ActionBonus(gym.Wrapper):
         >>> from minigrid.wrappers import ActionBonus
         >>> env = gym.make("MiniGrid-Empty-5x5-v0")
         >>> _, _ = env.reset(seed=0)
-        >>> _, reward, _, _, _ = env.step(1)
+        >>> _, reward, _, _, _ = env.step({0: 1})
         >>> print(reward)
         0
-        >>> _, reward, _, _, _ = env.step(1)
+        >>> _, reward, _, _, _ = env.step({0: 1})
         >>> print(reward)
         0
         >>> env_bonus = ActionBonus(env)
         >>> _, _ = env_bonus.reset(seed=0)
-        >>> _, reward, _, _, _ = env_bonus.step(1)
+        >>> _, reward, _, _, _ = env_bonus.step({0: 1})
         >>> print(reward)
         1.0
-        >>> _, reward, _, _, _ = env_bonus.step(1)
+        >>> _, reward, _, _, _ = env_bonus.step({0: 1})
         >>> print(reward)
         1.0
     """
@@ -101,26 +101,37 @@ class ActionBonus(gym.Wrapper):
             env: The environment to apply the wrapper
         """
         super().__init__(env)
-        self.counts = {}
+        self.counts = {i: {} for i in self.unwrapped.agents.keys()}
 
     def step(self, action):
         """Steps through the environment with `action`."""
         obs, reward, terminated, truncated, info = self.env.step(action)
 
+        reward = info["rewards"]
+
         env = self.unwrapped
-        tup = (tuple(env.unwrapped.agent_pos), env.unwrapped.agent_dir, action)
+        agent_status = {}
+        for agent_id in env.agents.keys():
+            agent_status[agent_id] = (tuple(env.agents[agent_id].pos), env.agents[agent_id].dir, action[agent_id])
 
         # Get the count for this (s,a) pair
-        pre_count = 0
-        if tup in self.counts:
-            pre_count = self.counts[tup]
+        for agent_id in env.agents.keys():
+            pre_count = 0
+            tup = agent_status[agent_id]
+            if tup in self.counts[agent_id].keys():
+                pre_count = self.counts[agent_id][tup]
 
-        # Update the count for this (s,a) pair
-        new_count = pre_count + 1
-        self.counts[tup] = new_count
+            # Update the count for this (s,a) pair
+            new_count = pre_count + 1
+            self.counts[agent_id][tup] = new_count
 
-        bonus = 1 / math.sqrt(new_count)
-        reward += bonus
+            bonus = 1 / math.sqrt(new_count)
+            reward[agent_id] += bonus
+
+        info["rewards"] = reward
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
 
         return obs, reward, terminated, truncated, info
 
@@ -161,28 +172,38 @@ class PositionBonus(Wrapper):
             env: The environment to apply the wrapper
         """
         super().__init__(env)
-        self.counts = {}
+        self.counts = {i: {} for i in self.unwrapped.agents.keys()}
 
     def step(self, action):
         """Steps through the environment with `action`."""
         obs, reward, terminated, truncated, info = self.env.step(action)
 
+        reward = info["rewards"]
+
         # Tuple based on which we index the counts
         # We use the position after an update
         env = self.unwrapped
-        tup = tuple(env.agent_pos)
 
-        # Get the count for this key
-        pre_count = 0
-        if tup in self.counts:
-            pre_count = self.counts[tup]
+        agent_status = {}
+        for agent_id in env.agents.keys():
+            agent_status[agent_id] = env.agents[agent_id].pos
 
-        # Update the count for this key
-        new_count = pre_count + 1
-        self.counts[tup] = new_count
+        for agent_id in env.agents.keys():
+            tup = agent_status[agent_id]
 
-        bonus = 1 / math.sqrt(new_count)
-        reward += bonus
+            # Get the count for this key
+            pre_count = 0
+            if tup in self.counts[agent_id]:
+                pre_count = self.counts[agent_id][tup]
+
+            # Update the count for this key
+            new_count = pre_count + 1
+            self.counts[agent_id][tup] = new_count
+
+            bonus = 1 / math.sqrt(new_count)
+            reward[agent_id] += bonus
+
+        reward = sum(reward.values())
 
         return obs, reward, terminated, truncated, info
 
@@ -211,23 +232,30 @@ class ImgObsWrapper(ObservationWrapper):
             env: The environment to apply the wrapper
         """
         super().__init__(env)
-        self.observation_space = env.observation_space.spaces["image"]
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = agent.observation_space.spaces["image"]
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
-        return obs["image"]
+        return {agent_id: obs[agent_id]["image"] for agent_id in obs.keys()}
 
 
 class OneHotPartialObsWrapper(ObservationWrapper):
     """
     Wrapper to get a one-hot encoding of a partially observable
-    agent view as observation.
+    agent views as observation.
 
     Example:
         >>> import gymnasium as gym
         >>> from minigrid.wrappers import OneHotPartialObsWrapper
         >>> env = gym.make("MiniGrid-Empty-5x5-v0")
         >>> obs, _ = env.reset()
-        >>> obs["image"][0, :, :]
+        >>> obs[0]["image"][0, :, :]
         array([[2, 5, 0],
                [2, 5, 0],
                [2, 5, 0],
@@ -237,7 +265,7 @@ class OneHotPartialObsWrapper(ObservationWrapper):
                [2, 5, 0]], dtype=uint8)
         >>> env = OneHotPartialObsWrapper(env)
         >>> obs, _ = env.reset()
-        >>> obs["image"][0, :, :]
+        >>> obs[0]["image"][0, :, :]
         array([[0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
                [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
                [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
@@ -258,7 +286,7 @@ class OneHotPartialObsWrapper(ObservationWrapper):
 
         self.tile_size = tile_size
 
-        obs_shape = env.observation_space["image"].shape
+        obs_shape = env.observation_space[0]["image"].shape
 
         # Number of bits per cell
         num_bits = len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + len(STATE_TO_IDX)
@@ -266,31 +294,39 @@ class OneHotPartialObsWrapper(ObservationWrapper):
         new_image_space = spaces.Box(
             low=0, high=255, shape=(obs_shape[0], obs_shape[1], num_bits), dtype="uint8"
         )
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
-        img = obs["image"]
-        out = np.zeros(self.observation_space.spaces["image"].shape, dtype="uint8")
+        for agent_id in self.env.unwrapped.agents.keys():
+            img = obs[agent_id]["image"]
+            out = np.zeros(self.observation_space[agent_id].spaces["image"].shape, dtype="uint8")
+            for i in range(img.shape[0]):
+                for j in range(img.shape[1]):
+                    type = img[i, j, 0]
+                    color = img[i, j, 1]
+                    state = img[i, j, 2]
 
-        for i in range(img.shape[0]):
-            for j in range(img.shape[1]):
-                type = img[i, j, 0]
-                color = img[i, j, 1]
-                state = img[i, j, 2]
-
-                out[i, j, type] = 1
-                out[i, j, len(OBJECT_TO_IDX) + color] = 1
-                out[i, j, len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + state] = 1
-
-        return {**obs, "image": out}
+                    out[i, j, type] = 1
+                    out[i, j, len(OBJECT_TO_IDX) + color] = 1
+                    out[i, j, len(OBJECT_TO_IDX) + len(COLOR_TO_IDX) + state] = 1
+            obs[agent_id]["image"] = out
+        return obs
 
 
 class RGBImgObsWrapper(ObservationWrapper):
     """
     Wrapper to use fully observable RGB image as observation,
-    This can be used to have the agent to solve the gridworld in pixel space.
+    This can be used to have the agents to solve the gridworld in pixel space.
 
     Example:
         >>> import gymnasium as gym
@@ -298,7 +334,7 @@ class RGBImgObsWrapper(ObservationWrapper):
         >>> from minigrid.wrappers import RGBImgObsWrapper
         >>> env = gym.make("MiniGrid-Empty-5x5-v0")
         >>> obs, _ = env.reset()
-        >>> plt.imshow(obs['image'])  # doctest: +SKIP
+        >>> plt.imshow(obs[0]['image'])  # doctest: +SKIP
         ![NoWrapper](../figures/lavacrossing_NoWrapper.png)
         >>> env = RGBImgObsWrapper(env)
         >>> obs, _ = env.reset()
@@ -322,16 +358,26 @@ class RGBImgObsWrapper(ObservationWrapper):
             dtype="uint8",
         )
 
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
-        rgb_img = self.unwrapped.get_frame(
-            highlight=self.unwrapped.highlight, tile_size=self.tile_size
-        )
+        for agent_id in self.env.unwrapped.agents.keys():
+            rgb_img = self.unwrapped.get_frame(
+                highlight=self.unwrapped.highlight, tile_size=self.tile_size
+            )
 
-        return {**obs, "image": rgb_img}
+            obs[agent_id]["image"] = rgb_img
+
+        return obs
 
 
 class RGBImgPartialObsWrapper(ObservationWrapper):
@@ -363,7 +409,7 @@ class RGBImgPartialObsWrapper(ObservationWrapper):
         # Rendering attributes for observations
         self.tile_size = tile_size
 
-        obs_shape = env.observation_space.spaces["image"].shape
+        obs_shape = env.observation_space[0].spaces["image"].shape
         new_image_space = spaces.Box(
             low=0,
             high=255,
@@ -371,19 +417,29 @@ class RGBImgPartialObsWrapper(ObservationWrapper):
             dtype="uint8",
         )
 
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
-        rgb_img_partial = self.unwrapped.get_frame(tile_size=self.tile_size, agent_pov=True)
+        for agent_id in self.env.unwrapped.agents.keys():
+            obs[agent_id]["image"] = self.unwrapped.get_frame(
+                tile_size=self.tile_size, agent_pov=True
+            )
 
-        return {**obs, "image": rgb_img_partial}
+        return obs
 
 
 class FullyObsWrapper(ObservationWrapper):
     """
-    Fully observable gridworld using a compact grid encoding instead of the agent view.
+    Fully observable gridworld using a compact grid encoding instead of the agent views.
 
     Example:
         >>> import gymnasium as gym
@@ -409,18 +465,26 @@ class FullyObsWrapper(ObservationWrapper):
             dtype="uint8",
         )
 
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
         env = self.unwrapped
-        full_grid = env.unwrapped.grid.encode()
-        full_grid[env.unwrapped.agent_pos[0]][env.unwrapped.agent_pos[1]] = np.array(
-            [OBJECT_TO_IDX["agent"], COLOR_TO_IDX["red"], env.unwrapped.agent_dir]
-        )
-
-        return {**obs, "image": full_grid}
+        for agent_id in env.agents.keys():
+            full_grid = env.unwrapped.grid.encode()
+            full_grid[env.agents[agent_id].pos[0]][env.agents[agent_id].pos[1]] = np.array(
+                [OBJECT_TO_IDX["agent"], COLOR_TO_IDX["red"], env.agents[agent_id].dir]
+            )
+            obs[agent_id]["image"] = full_grid
+        return obs
 
 
 class DictObservationSpaceWrapper(ObservationWrapper):
@@ -458,13 +522,21 @@ class DictObservationSpaceWrapper(ObservationWrapper):
         self.max_words_in_mission = max_words_in_mission
         self.word_dict = word_dict
 
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {
+                    "image": agent.observation_space["image"],
+                    "direction": spaces.Discrete(4),
+                    "mission": spaces.MultiDiscrete(
+                        [len(self.word_dict.keys())] * max_words_in_mission
+                    ),
+                }
+            )
+
         self.observation_space = spaces.Dict(
             {
-                "image": env.observation_space["image"],
-                "direction": spaces.Discrete(4),
-                "mission": spaces.MultiDiscrete(
-                    [len(self.word_dict.keys())] * max_words_in_mission
-                ),
+                agent.id: agent.observation_space
+                for agent in env.unwrapped.agents.values()
             }
         )
 
@@ -544,10 +616,10 @@ class DictObservationSpaceWrapper(ObservationWrapper):
         return indices
 
     def observation(self, obs):
-        obs["mission"] = self.string_to_indices(obs["mission"])
-        assert len(obs["mission"]) < self.max_words_in_mission
-        obs["mission"] += [0] * (self.max_words_in_mission - len(obs["mission"]))
-
+        for agent_id in self.env.unwrapped.agents.keys():
+            obs[agent_id]["mission"] = self.string_to_indices(obs[agent_id]["mission"])
+            assert len(obs[agent_id]["mission"]) < self.max_words_in_mission
+            obs[agent_id]["mission"] += [0] * (self.max_words_in_mission - len(obs[agent_id]["mission"]))
         return obs
 
 
@@ -575,51 +647,60 @@ class FlatObsWrapper(ObservationWrapper):
         self.maxStrLen = maxStrLen
         self.numCharCodes = 28
 
-        imgSpace = env.observation_space.spaces["image"]
+        imgSpace = env.observation_space[0].spaces["image"]
         imgSize = reduce(operator.mul, imgSpace.shape, 1)
 
-        self.observation_space = spaces.Box(
-            low=0,
-            high=255,
-            shape=(imgSize + self.numCharCodes * self.maxStrLen,),
-            dtype="uint8",
+        for agent in self.env.unwrapped.agents.values():
+            agent.observation_space = spaces.Box(
+                low=0,
+                high=255,
+                shape=(imgSize + self.numCharCodes * self.maxStrLen,),
+                dtype="uint8",
+            )
+
+        self.observation_space = spaces.Dict(
+            {
+                agent.id: agent.observation_space
+                for agent in self.env.unwrapped.agents.values()
+            }
         )
 
         self.cachedStr: str = None
 
     def observation(self, obs):
-        image = obs["image"]
-        mission = obs["mission"]
+        for agent in self.env.unwrapped.agents.values():
+            image = obs[agent.id]["image"]
+            mission = obs[agent.id]["mission"]
 
-        # Cache the last-encoded mission string
-        if mission != self.cachedStr:
-            assert (
-                len(mission) <= self.maxStrLen
-            ), f"mission string too long ({len(mission)} chars)"
-            mission = mission.lower()
+            # Cache the last-encoded mission string
+            if mission != self.cachedStr:
+                assert (
+                    len(mission) <= self.maxStrLen
+                ), f"mission string too long ({len(mission)} chars)"
+                mission = mission.lower()
 
-            strArray = np.zeros(
-                shape=(self.maxStrLen, self.numCharCodes), dtype="float32"
-            )
+                strArray = np.zeros(
+                    shape=(self.maxStrLen, self.numCharCodes), dtype="float32"
+                )
 
-            for idx, ch in enumerate(mission):
-                if ch >= "a" and ch <= "z":
-                    chNo = ord(ch) - ord("a")
-                elif ch == " ":
-                    chNo = ord("z") - ord("a") + 1
-                elif ch == ",":
-                    chNo = ord("z") - ord("a") + 2
-                else:
-                    raise ValueError(
-                        f"Character {ch} is not available in mission string."
-                    )
-                assert chNo < self.numCharCodes, "%s : %d" % (ch, chNo)
-                strArray[idx, chNo] = 1
+                for idx, ch in enumerate(mission):
+                    if ch >= "a" and ch <= "z":
+                        chNo = ord(ch) - ord("a")
+                    elif ch == " ":
+                        chNo = ord("z") - ord("a") + 1
+                    elif ch == ",":
+                        chNo = ord("z") - ord("a") + 2
+                    else:
+                        raise ValueError(
+                            f"Character {ch} is not available in mission string."
+                        )
+                    assert chNo < self.numCharCodes, "%s : %d" % (ch, chNo)
+                    strArray[idx, chNo] = 1
 
-            self.cachedStr = mission
-            self.cachedArray = strArray
+                self.cachedStr = mission
+                self.cachedArray = strArray
 
-        obs = np.concatenate((image.flatten(), self.cachedArray.flatten()))
+            obs[agent.id] = np.concatenate((image.flatten(), self.cachedArray.flatten()))
 
         return obs
 
@@ -648,27 +729,31 @@ class ViewSizeWrapper(ObservationWrapper):
         assert agent_view_size % 2 == 1
         assert agent_view_size >= 3
 
-        self.agent_view_size = agent_view_size
-
         # Compute observation space with specified view size
         new_image_space = gym.spaces.Box(
             low=0, high=255, shape=(agent_view_size, agent_view_size, 3), dtype="uint8"
         )
 
+        for agent in self.env.unwrapped.agents.values():
+            agent.view_size = agent_view_size
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
         # Override the environment's observation spaceexit
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+        self.env.unwrapped.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in self.env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
-        env = self.unwrapped
-
-        grid, vis_mask = env.gen_obs_grid(self.agent_view_size)
-
-        # Encode the partially observable view into a numpy array
-        image = grid.encode(vis_mask)
-
-        return {**obs, "image": image}
+        # print(obs)
+        for agent in self.env.unwrapped.agents.values():
+            grid, vis_mask = agent.gen_obs_grid(self.env.unwrapped.grid_with_agents())
+            # Encode the partially observable view into a numpy array
+            obs[agent.id]["image"] = grid.encode(vis_mask)
+        # print(obs)
+        return obs
 
 
 class DirectionObsWrapper(ObservationWrapper):
@@ -689,37 +774,52 @@ class DirectionObsWrapper(ObservationWrapper):
 
     def __init__(self, env, type="slope"):
         super().__init__(env)
-        self.goal_position: tuple = None
+        self.goal_position: dict[tuple] = {i: None for i in self.env.unwrapped.agents.keys()}
         self.type = type
+
+        agent_obs_space = spaces.Dict(
+            {
+                **self.observation_space.spaces,
+                "goal_direction": spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype="float32"),
+            }
+        )
+
+        self.observation_space = spaces.Dict(
+            {
+                agent_id: agent_obs_space
+                for agent_id in self.env.unwrapped.agents.keys()
+            }
+        )
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[ObsType, dict[str, Any]]:
         obs, info = self.env.reset()
 
-        if not self.goal_position:
-            self.goal_position = [
-                x for x, y in enumerate(self.unwrapped.grid.grid) if isinstance(y, Goal)
-            ]
-            # in case there are multiple goals , needs to be handled for other env types
-            if len(self.goal_position) >= 1:
-                self.goal_position = (
-                    int(self.goal_position[0] / self.unwrapped.height),
-                    self.goal_position[0] % self.unwrapped.width,
-                )
-
+        goal_found = 0
+        for agent_id in self.env.unwrapped.agents.keys():
+            if self.goal_position[agent_id] is None:
+                for x in range(self.unwrapped.grid.width):
+                    for y in range(self.unwrapped.grid.height):
+                        if isinstance(self.unwrapped.grid.get(x, y), Goal):
+                            self.goal_position[agent_id] = (x, y)
+                            goal_found += 1
+                # in case there are multiple goals , needs to be handled for other env types
+                assert goal_found == 1, "Multiple goals found"
+                assert goal_found != 0, "No goal found"
         return self.observation(obs), info
 
     def observation(self, obs):
-        slope = np.divide(
-            self.goal_position[1] - self.unwrapped.agent_pos[1],
-            self.goal_position[0] - self.unwrapped.agent_pos[0],
-        )
+        for agent in self.env.unwrapped.agents.values():
+            slope = np.divide(
+                self.goal_position[agent.id][1] - agent.pos[1],
+                self.goal_position[agent.id][0] - agent.pos[0],
+            )
 
-        if self.type == "angle":
-            obs["goal_direction"] = np.arctan(slope)
-        else:
-            obs["goal_direction"] = slope
+            if self.type == "angle":
+                obs[agent.id]["goal_direction"] = np.arctan(slope)
+            else:
+                obs[agent.id]["goal_direction"] = slope
 
         return obs
 
@@ -752,23 +852,39 @@ class SymbolicObsWrapper(ObservationWrapper):
             shape=(self.env.unwrapped.width, self.env.unwrapped.height, 3),  # number of cells
             dtype="uint8",
         )
-        self.observation_space = spaces.Dict(
-            {**self.observation_space.spaces, "image": new_image_space}
-        )
+
+        for agent in env.unwrapped.agents.values():
+            agent.observation_space = spaces.Dict(
+                {**agent.observation_space, "image": new_image_space}
+            )
+
+        # Set joint observation space
+        self.observation_space = spaces.Dict({
+            agent.id: agent.observation_space
+            for agent in env.unwrapped.agents.values()
+        })
 
     def observation(self, obs):
         objects = np.array(
             [OBJECT_TO_IDX[o.type] if o is not None else -1 for o in self.unwrapped.grid.grid]
         )
-        agent_pos = self.env.unwrapped.agent_pos
         ncol, nrow = self.unwrapped.width, self.unwrapped.height
         grid = np.mgrid[:ncol, :nrow]
         _objects = np.transpose(objects.reshape(1, nrow, ncol), (0, 2, 1))
-
         grid = np.concatenate([grid, _objects])
         grid = np.transpose(grid, (1, 2, 0))
-        grid[agent_pos[0], agent_pos[1], 2] = OBJECT_TO_IDX["agent"]
-        obs["image"] = grid
+        for agent in self.env.unwrapped.agents.values():
+            grid[agent.pos[0], agent.pos[1], 2] = OBJECT_TO_IDX["agent"]
+            obs[agent.id]["image"] = grid
+        # agent_pos = self.env.unwrapped.agent_pos
+        # ncol, nrow = self.unwrapped.width, self.unwrapped.height
+        # grid = np.mgrid[:ncol, :nrow]
+        # _objects = np.transpose(objects.reshape(1, nrow, ncol), (0, 2, 1))
+
+        # grid = np.concatenate([grid, _objects])
+        # grid = np.transpose(grid, (1, 2, 0))
+        # grid[agent_pos[0], agent_pos[1], 2] = OBJECT_TO_IDX["agent"]
+        # obs["image"] = grid
 
         return obs
 
@@ -788,13 +904,15 @@ class StochasticActionWrapper(ActionWrapper):
 
     def action(self, action):
         """ """
-        if np.random.uniform() < self.prob:
-            return action
-        else:
-            if self.random_action is None:
-                return self.np_random.integers(0, high=6)
+        for agent_id in self.env.unwrapped.agents.keys():
+            if np.random.uniform() < self.prob:
+                action[agent_id] = action[agent_id]
             else:
-                return self.random_action
+                if self.random_action is None:
+                    action[agent_id] = self.np_random.integers(0, high=6)
+                else:
+                    action[agent_id] = self.random_action
+        return action
 
 
 class NoDeath(Wrapper):
@@ -852,22 +970,31 @@ class NoDeath(Wrapper):
     def step(self, action):
         # In Dynamic-Obstacles, obstacles move after the agent moves,
         # so we need to check for collision before self.env.step()
-        front_cell = self.unwrapped.grid.get(*self.unwrapped.front_pos)
-        going_to_death = (
-            action == self.unwrapped.actions.forward
-            and front_cell is not None
-            and front_cell.type in self.no_death_types
-        )
+        going_to_deaths = {}
+        for agent in self.unwrapped.agents.values():
+            front_cell = self.unwrapped.grid.get(*agent.front_pos)
+            going_to_deaths[agent.id] = (
+                action[agent.id] == self.unwrapped.actions.forward
+                and front_cell is not None
+                and front_cell.type in self.no_death_types
+            )
 
         obs, reward, terminated, truncated, info = self.env.step(action)
 
+        reward = info["rewards"]
+        terminated = info["terminated"]
+
         # We also check if the agent stays in death cells (e.g., lava)
         # without moving
-        current_cell = self.unwrapped.grid.get(*self.unwrapped.agent_pos)
-        in_death = current_cell is not None and current_cell.type in self.no_death_types
+        for agent in self.unwrapped.agents.values():
+            current_cell = self.unwrapped.grid.get(*agent.pos)
+            in_death = current_cell is not None and current_cell.type in self.no_death_types
 
-        if terminated and (going_to_death or in_death):
-            terminated = False
-            reward += self.death_cost
+            if terminated[agent.id] and (going_to_deaths[agent.id] or in_death):
+                terminated[agent.id] = False
+                reward[agent.id] += self.death_cost
+
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.unwrapped.is_competitive_env else all(terminated.values())
 
         return obs, reward, terminated, truncated, info
