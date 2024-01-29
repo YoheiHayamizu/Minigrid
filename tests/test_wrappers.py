@@ -362,9 +362,9 @@ def test_dict_observation_space_doesnt_clash_with_one_hot():
     env = DictObservationSpaceWrapper(env)
     env.reset()
     obs, _, _, _, _ = env.step({0: 0, 1: 0})
-    assert obs[0]["image"].shape == (7, 7, 20)
+    assert obs[0]["image"].shape == (7, 7, 21)
     # assert obs[1]["image"].shape == (7, 7, 20)
-    assert env.observation_space[0]["image"].shape == (7, 7, 20)
+    assert env.observation_space[0]["image"].shape == (7, 7, 21)
     # assert env.observation_space[1]["image"].shape == (7, 7, 20)
     env.close()
 
