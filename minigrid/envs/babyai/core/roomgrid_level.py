@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from minigrid.core.roomgrid import RoomGrid
 from minigrid.envs.babyai.core.verifier import (
+    Instr,
     ActionInstr,
     AfterInstr,
     AndInstr,
@@ -53,6 +54,9 @@ class RoomGridLevel(RoomGrid):
     def __init__(self, room_size=8, max_steps: int | None = None, **kwargs):
         mission_space = BabyAIMissionSpace()
 
+        # Instructions in the baby language
+        self.instrs: Instr = None
+
         # If `max_steps` arg is passed it will be fixed for every episode,
         # if not it will vary after reset depending on the maze size.
         self.fixed_max_steps = False
@@ -83,22 +87,36 @@ class RoomGridLevel(RoomGrid):
 
         return obs
 
-    def step(self, action):
-        obs, reward, terminated, truncated, info = super().step(action)
+    def step(self, actions):
+        obs, reward, terminated, truncated, info = super().step(actions)
 
-        # If we drop an object, we need to update its position in the environment
-        if action == self.actions.drop:
-            self.update_objs_poss()
+        reward = info["rewards"]
+        terminated = info["terminated"]
+        truncated = info["truncated"]
 
-        # If we've successfully completed the mission
-        status = self.instrs.verify(action)
+        for agent in self.agents.values():
+            # If we drop an object, we need to update its position in the environment
+            if actions[agent.id] == self.actions.done:
+                self.update_objs_poss()
 
-        if status == "success":
-            terminated = True
-            reward = self._reward()
-        elif status == "failure":
-            terminated = True
-            reward = 0
+            # If we've successfully completed the mission
+            status = self.instrs.verify(actions[agent.id], agent.id)
+
+            if status == "success":
+                terminated[agent.id] = True
+                reward[agent.id] = self._reward()
+            elif status == "failure":
+                terminated[agent.id] = True
+                reward[agent.id] = 0
+
+        info["rewards"] = reward
+        info["terminated"] = terminated
+        info["truncated"] = truncated
+
+        # The reward from environment is the sum of rewards of all agents
+        reward = sum(reward.values())
+        terminated = any(terminated.values()) if self.is_competitive_env else all(terminated.values())
+        truncated = any(truncated.values())
 
         return obs, reward, terminated, truncated, info
 
@@ -257,7 +275,7 @@ class RoomGridLevel(RoomGrid):
         reachable = set()
 
         # Work list
-        stack = [self.agent_pos]
+        stack = [self.agents[0].pos]
 
         while len(stack) > 0:
             i, j = stack.pop()

@@ -40,12 +40,12 @@ def test_bot(env_id):
         env.reset(seed=curr_seed)
 
         # create expert bot
-        expert = BabyAIBot(env)
+        expert = BabyAIBot(env, agent_id=0)
 
         last_action = None
         for _step in range(num_steps):
             action = expert.replan(last_action)
-            obs, reward, terminated, truncated, info = env.step(action)
+            obs, reward, terminated, truncated, info = env.step({0: action})
             last_action = action
             env.render()
 

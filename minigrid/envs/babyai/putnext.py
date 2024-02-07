@@ -193,9 +193,10 @@ class PutNext(RoomGridLevel):
         obs = super().reset(**kwargs)
 
         # If the agent starts off carrying the object
+        # The agent with id 0 is the only agent which has an object
         if self.start_carrying:
             assert self.obj_a.init_pos is not None
             self.grid.set(*self.obj_a.init_pos, None)
-            self.carrying = self.obj_a
+            self.agents[0].carrying = self.obj_a
 
         return obs

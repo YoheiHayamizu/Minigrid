@@ -115,56 +115,58 @@ class ObjDesc:
 
         self.obj_poss = []
 
-        agent_room = env.unwrapped.room_from_pos(*env.unwrapped.agent_pos)
+        for agent in env.unwrapped.agents.values():
+            agent_room = env.unwrapped.room_from_pos(*agent.pos)
 
-        for i in range(env.unwrapped.grid.width):
-            for j in range(env.unwrapped.grid.height):
-                cell = env.unwrapped.grid.get(i, j)
-                if cell is None:
-                    continue
-
-                if not use_location:
-                    # we should keep tracking the same objects initially tracked only
-                    already_tracked = any([cell is obj for obj in self.obj_set])
-                    if not already_tracked:
+            # Find the set of objects matching the description for each agent
+            for i in range(env.unwrapped.grid.width):
+                for j in range(env.unwrapped.grid.height):
+                    cell = env.unwrapped.grid.get(i, j)
+                    if cell is None:
                         continue
 
-                # Check if object's type matches description
-                if self.type is not None and cell.type != self.type:
-                    continue
+                    if not use_location:
+                        # we should keep tracking the same objects initially tracked only
+                        already_tracked = any([cell is obj for obj in self.obj_set])
+                        if not already_tracked:
+                            continue
 
-                # Check if object's color matches description
-                if self.color is not None and cell.color != self.color:
-                    continue
-
-                # Check if object's position matches description
-                if use_location and self.loc in ["left", "right", "front", "behind"]:
-                    # Locations apply only to objects in the same room
-                    # the agent starts in
-                    if not agent_room.pos_inside(i, j):
+                    # Check if object's type matches description
+                    if self.type is not None and cell.type != self.type:
                         continue
 
-                    # Direction from the agent to the object
-                    v = (i - env.unwrapped.agent_pos[0], j - env.unwrapped.agent_pos[1])
-
-                    # (d1, d2) is an oriented orthonormal basis
-                    d1 = DIR_TO_VEC[env.agent_dir]
-                    d2 = (-d1[1], d1[0])
-
-                    # Check if object's position matches with location
-                    pos_matches = {
-                        "left": dot_product(v, d2) < 0,
-                        "right": dot_product(v, d2) > 0,
-                        "front": dot_product(v, d1) > 0,
-                        "behind": dot_product(v, d1) < 0,
-                    }
-
-                    if not (pos_matches[self.loc]):
+                    # Check if object's color matches description
+                    if self.color is not None and cell.color != self.color:
                         continue
 
-                if use_location:
-                    self.obj_set.append(cell)
-                self.obj_poss.append((i, j))
+                    # Check if object's position matches description
+                    if use_location and self.loc in ["left", "right", "front", "behind"]:
+                        # Locations apply only to objects in the same room
+                        # the agent starts in
+                        if not agent_room.pos_inside(i, j):
+                            continue
+
+                        # Direction from the agent to the object
+                        v = (i - agent.pos[0], j - agent.pos[1])
+
+                        # (d1, d2) is an oriented orthonormal basis
+                        d1 = DIR_TO_VEC[agent.dir]
+                        d2 = (-d1[1], d1[0])
+
+                        # Check if object's position matches with location
+                        pos_matches = {
+                            "left": dot_product(v, d2) < 0,
+                            "right": dot_product(v, d2) > 0,
+                            "front": dot_product(v, d1) > 0,
+                            "behind": dot_product(v, d1) < 0,
+                        }
+
+                        if not (pos_matches[self.loc]):
+                            continue
+
+                    if use_location:
+                        self.obj_set.append(cell)
+                    self.obj_poss.append((i, j))
 
         return self.obj_set, self.obj_poss
 
@@ -193,7 +195,7 @@ class Instr(ABC):
         self.env = env
 
     @abstractmethod
-    def verify(self, action):
+    def verify(self, action, agent_id):
         """
         Verify if the task described by the instruction is incomplete,
         complete with success or failed. The return value is a string,
@@ -223,20 +225,20 @@ class ActionInstr(Instr, ABC):
         # Indicates that the action was completed on the last step
         self.lastStepMatch = False
 
-    def verify(self, action):
+    def verify(self, action, agent_id):
         """
         Verifies actions, with and without the done action.
         """
 
         if not use_done_actions:
-            return self.verify_action(action)
+            return self.verify_action(action, agent_id)
 
         if action == self.env.unwrapped.actions.done:
             if self.lastStepMatch:
                 return "success"
             return "failure"
 
-        res = self.verify_action(action)
+        res = self.verify_action(action, agent_id)
         self.lastStepMatch = res == "success"
 
     @abstractmethod
@@ -265,7 +267,7 @@ class OpenInstr(ActionInstr):
         # Identify set of possible matching objects in the environment
         self.desc.find_matching_objs(env)
 
-    def verify_action(self, action):
+    def verify_action(self, action, agent_id):
         # Only verify when the toggle action is performed
         if action != self.env.unwrapped.actions.toggle:
             return "continue"
@@ -304,11 +306,11 @@ class GoToInstr(ActionInstr):
         # Identify set of possible matching objects in the environment
         self.desc.find_matching_objs(env)
 
-    def verify_action(self, action):
+    def verify_action(self, action, agent_id):
         # For each object position
         for pos in self.desc.obj_poss:
             # If the agent is next to (and facing) the object
-            if np.array_equal(pos, self.env.front_pos):
+            if np.array_equal(pos, self.env.agents[agent_id].front_pos):
                 return "success"
 
         return "continue"
@@ -338,7 +340,7 @@ class PickupInstr(ActionInstr):
         # Identify set of possible matching objects in the environment
         self.desc.find_matching_objs(env)
 
-    def verify_action(self, action):
+    def verify_action(self, action, agent_id):
         # To keep track of what was carried at the last time step
         preCarrying = self.preCarrying
         self.preCarrying = self.env.carrying
@@ -406,7 +408,7 @@ class PutNextInstr(ActionInstr):
                     return True
         return False
 
-    def verify_action(self, action):
+    def verify_action(self, action, agent_id):
         # To keep track of what was carried at the last time step
         preCarrying = self.preCarrying
         self.preCarrying = self.env.carrying
@@ -462,7 +464,7 @@ class BeforeInstr(SeqInstr):
         self.a_done = False
         self.b_done = False
 
-    def verify(self, action):
+    def verify(self, action, agent_id):
         if self.a_done == "success":
             self.b_done = self.instr_b.verify(action)
 
@@ -503,9 +505,9 @@ class AfterInstr(SeqInstr):
         self.a_done = False
         self.b_done = False
 
-    def verify(self, action):
+    def verify(self, action, agent_id):
         if self.b_done == "success":
-            self.a_done = self.instr_a.verify(action)
+            self.a_done = self.instr_a.verify(action, agent_id)
 
             if self.a_done == "success":
                 return "success"
@@ -513,16 +515,16 @@ class AfterInstr(SeqInstr):
             if self.a_done == "failure":
                 return "failure"
         else:
-            self.b_done = self.instr_b.verify(action)
+            self.b_done = self.instr_b.verify(action, agent_id)
             if self.b_done == "failure":
                 return "failure"
 
             if self.b_done == "success":
-                return self.verify(action)
+                return self.verify(action, agent_id)
 
             # In strict mode, completing a first means failure
             if self.strict:
-                if self.instr_a.verify(action) == "success":
+                if self.instr_a.verify(action, agent_id) == "success":
                     return "failure"
 
         return "continue"
@@ -549,12 +551,12 @@ class AndInstr(SeqInstr):
         self.a_done = False
         self.b_done = False
 
-    def verify(self, action):
+    def verify(self, action, agent_id):
         if self.a_done != "success":
-            self.a_done = self.instr_a.verify(action)
+            self.a_done = self.instr_a.verify(action, agent_id)
 
         if self.b_done != "success":
-            self.b_done = self.instr_b.verify(action)
+            self.b_done = self.instr_b.verify(action, agent_id)
 
         if use_done_actions and action is self.env.unwrapped.actions.done:
             if self.a_done == "failure" and self.b_done == "failure":

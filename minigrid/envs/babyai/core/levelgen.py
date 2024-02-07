@@ -66,9 +66,11 @@ class LevelGen(RoomGridLevel):
         # The agent must be placed after all the object to respect constraints
         while True:
             self.place_agent()
-            start_room = self.room_from_pos(*self.agent_pos)
+            start_room = []
+            for agent in self.agents.values():
+                start_room.append(self.room_from_pos(*agent.pos))
             # Ensure that we are not placing the agent in the locked room
-            if start_room is self.locked_room:
+            if any([room is self.locked_room for room in start_room]):
                 continue
             break
 
