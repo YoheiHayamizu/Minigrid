@@ -596,7 +596,6 @@ class MiniGridEnv(gym.Env):
                 if a.id != agent.id:
                     a.dir = tmp_agent_dirs[a.id]
 
-        print(img.keys())
         return img[agent_id]
 
     def get_full_render(self, highlight, tile_size):
