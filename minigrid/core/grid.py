@@ -192,7 +192,7 @@ class Grid:
         fill_coords(img, point_in_rect(0, 1, 0, 0.031), (100, 100, 100))
 
         if obj is not None:
-            print("Agent", obj.dir) if obj.type == "agent" else None
+            # print("Agent", obj.dir) if obj.type == "agent" else None
             obj.render(img)
 
         # Highlight the cell if needed

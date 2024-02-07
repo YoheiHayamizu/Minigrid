@@ -124,6 +124,7 @@ if __name__ == "__main__":
 
     env: MiniGridEnv = gym.make(
         args.env_id,
+        agents=2,
         tile_size=args.tile_size,
         render_mode="human",
         agent_pov=args.agent_view,

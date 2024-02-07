@@ -48,7 +48,7 @@ class MiniGridEnv(gym.Env):
         highlight: bool = True,
         tile_size: int = TILE_PIXELS,
         agent_pov: bool = False,
-        is_competitive_env: bool = False,
+        is_competitive_env: bool = True,
     ):
         """
         MiniGrid environment initialization
@@ -568,22 +568,36 @@ class MiniGridEnv(gym.Env):
         """
         return {agent.id: agent.gen_obs(self.grid_with_agents()) for agent in self.agents.values()}
 
-    def get_pov_render(self, tile_size):
+    def get_pov_render(self, tile_size, agent_id: int = 0):
         """
         Render an agent's POV observation for visualization
         """
-        assert len(self.agents) == 1, "This property is deprecated for multi-agent environments."
-        grid: Grid = None
-        vis_mask: np.ndarray = None
-        grid, vis_mask = self.agents[0].gen_obs_grid(self.grid_with_agents())
+        img = {}
+        # Compute agent visibility masks
+        for agent in self.agents.values():
 
-        # Render the whole grid
-        img = grid.render(
-            tile_size,
-            highlight_mask=vis_mask,
-        )
+            # Keep the original agent directions to restore them later
+            tmp_agent_dirs = [a.dir for a in self.agents.values()]
+            # Set all other agents' directions to ones from the current agent POV
+            for a in self.agents.values():
+                if a.id != agent.id:
+                    a.dir = (a.dir - agent.dir - 1) % 4
 
-        return img
+            grid, vis_mask = agent.gen_obs_grid(self.grid_with_agents())
+
+            # Render the whole grid
+            img[agent.id] = grid.render(
+                tile_size,
+                highlight_mask=vis_mask,
+            )
+
+            # Restore the original agent directions
+            for a in self.agents.values():
+                if a.id != agent.id:
+                    a.dir = tmp_agent_dirs[a.id]
+
+        print(img.keys())
+        return img[agent_id]
 
     def get_full_render(self, highlight, tile_size):
         """

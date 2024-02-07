@@ -291,7 +291,6 @@ class Agent(WorldObj):
         Draw the agent.
         """
         c = COLORS[self.color]
-        print(self.dir)
 
         if self.dir == -1:
             return
