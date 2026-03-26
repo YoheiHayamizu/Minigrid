@@ -5,13 +5,31 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from minigrid.core.constants import DIR_TO_VEC
+from minigrid.core.constants import COLORS, DIR_TO_VEC
+from minigrid.core.world_object import WorldObj
+from minigrid.utils.rendering import fill_coords, point_in_circle
 
 if TYPE_CHECKING:
-    from minigrid.core.world_object import WorldObj
+    pass
 
 # Default color palette for agents (up to 6 agents)
 AGENT_COLORS = ["red", "blue", "green", "purple", "yellow", "grey"]
+
+
+class AgentObj(WorldObj):
+    """World object representing another agent in the grid (for observations)."""
+
+    def __init__(self, color: str = "red"):
+        super().__init__("agent", color)
+
+    def can_overlap(self) -> bool:
+        return False
+
+    def see_behind(self) -> bool:
+        return True
+
+    def render(self, img):
+        fill_coords(img, point_in_circle(0.5, 0.5, 0.31), COLORS[self.color])
 
 
 @dataclass

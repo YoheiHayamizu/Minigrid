@@ -18,7 +18,7 @@ from minigrid.core.constants import COLOR_NAMES, DIR_TO_VEC, TILE_PIXELS
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Point, WorldObj
-from minigrid.multigrid.agent import AGENT_COLORS, AgentState
+from minigrid.multigrid.agent import AGENT_COLORS, AgentObj, AgentState
 
 T = TypeVar("T")
 
@@ -462,23 +462,125 @@ class MultiGridEnv(ParallelEnv):
         pass
 
     # ------------------------------------------------------------------
-    # Observation generation (placeholder — implemented in issue #5)
+    # Observation generation
     # ------------------------------------------------------------------
+
+    def _place_agent_objs(self, exclude: str | None = None) -> list[tuple[int, int]]:
+        """Temporarily place AgentObj instances in the grid for observation.
+
+        Args:
+            exclude: Agent name to exclude (the observing agent).
+
+        Returns:
+            List of (x, y) positions where AgentObj was placed.
+        """
+        placed = []
+        for name, state in self.agent_states.items():
+            if name == exclude:
+                continue
+            if not state.is_active:
+                continue
+            if state.pos == (-1, -1):
+                continue
+            # Only place if the cell is empty (don't overwrite objects)
+            cell = self.grid.get(*state.pos)
+            if cell is None:
+                self.grid.set(state.pos[0], state.pos[1], AgentObj(state.color))
+                placed.append(state.pos)
+        return placed
+
+    def _remove_agent_objs(self, positions: list[tuple[int, int]]):
+        """Remove temporarily placed AgentObj instances."""
+        for x, y in positions:
+            cell = self.grid.get(x, y)
+            if cell is not None and cell.type == "agent":
+                self.grid.set(x, y, None)
+
+    @staticmethod
+    def _get_view_exts(
+        agent_pos: tuple[int, int],
+        agent_dir: int,
+        view_size: int,
+    ) -> tuple[int, int, int, int]:
+        """Get the extents of the square set of tiles visible to an agent."""
+        if agent_dir == 0:  # right
+            topX = agent_pos[0]
+            topY = agent_pos[1] - view_size // 2
+        elif agent_dir == 1:  # down
+            topX = agent_pos[0] - view_size // 2
+            topY = agent_pos[1]
+        elif agent_dir == 2:  # left
+            topX = agent_pos[0] - view_size + 1
+            topY = agent_pos[1] - view_size // 2
+        elif agent_dir == 3:  # up
+            topX = agent_pos[0] - view_size // 2
+            topY = agent_pos[1] - view_size + 1
+        else:
+            raise ValueError(f"Invalid agent direction: {agent_dir}")
+
+        botX = topX + view_size
+        botY = topY + view_size
+        return topX, topY, botX, botY
+
+    def gen_obs_grid(
+        self, agent_name: str, agent_view_size: int | None = None
+    ) -> tuple[Grid, np.ndarray]:
+        """Generate the sub-grid observed by a specific agent.
+
+        Returns the observed grid and a visibility mask.
+        """
+        state = self.agent_states[agent_name]
+        view_size = agent_view_size or self.agent_view_size
+
+        # Temporarily place other agents in the grid
+        placed = self._place_agent_objs(exclude=agent_name)
+
+        try:
+            topX, topY, _, _ = self._get_view_exts(state.pos, state.dir, view_size)
+
+            grid = self.grid.slice(topX, topY, view_size, view_size)
+
+            for i in range(state.dir + 1):
+                grid = grid.rotate_left()
+
+            # Process visibility
+            if not self.see_through_walls:
+                vis_mask = grid.process_vis(
+                    agent_pos=(view_size // 2, view_size - 1)
+                )
+            else:
+                vis_mask = np.ones(shape=(grid.width, grid.height), dtype=bool)
+
+            # Place carried object at agent's position in view
+            agent_pos_in_view = grid.width // 2, grid.height - 1
+            if state.carrying:
+                grid.set(*agent_pos_in_view, state.carrying)
+            else:
+                grid.set(*agent_pos_in_view, None)
+
+            return grid, vis_mask
+        finally:
+            self._remove_agent_objs(placed)
 
     def gen_obs(self, agent_name: str) -> dict[str, Any]:
         """Generate observation for a specific agent.
 
-        Full implementation (POMDP/MDP, visibility, agent encoding)
-        is in issue #5. This returns a minimal valid observation.
+        POMDP mode (default): rotated partial view with visibility masking.
+        MDP mode (full_obs=True): full grid encoding with all agents.
         """
         state = self.agent_states[agent_name]
 
         if self.full_obs:
-            image = self.grid.encode()
+            # MDP: full grid with all agents visible
+            placed = self._place_agent_objs(exclude=agent_name)
+            try:
+                image = self.grid.encode()
+            finally:
+                self._remove_agent_objs(placed)
         else:
-            image = np.zeros(
-                (self.agent_view_size, self.agent_view_size, 3), dtype="uint8"
-            )
+            # POMDP: partial view
+            grid, vis_mask = self.gen_obs_grid(agent_name)
+            image = grid.encode(vis_mask)
 
         return {
             "image": image,
