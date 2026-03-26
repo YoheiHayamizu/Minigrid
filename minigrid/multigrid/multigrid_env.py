@@ -222,8 +222,12 @@ class MultiGridEnv(ParallelEnv):
     ]:
         """Execute simultaneous actions for all active agents.
 
-        Note: Full step logic (collision resolution, object interactions)
-        is implemented in issue #4. This provides the skeleton.
+        Processing order:
+        1. Rotation actions (left/right) — no conflicts possible
+        2. Forward movement with collision resolution
+        3. Object interactions (pickup/drop/toggle) in agent index order
+        4. Termination/truncation checks
+        5. Observation generation
         """
         self.step_count += 1
 
@@ -232,9 +236,112 @@ class MultiGridEnv(ParallelEnv):
         truncations = {name: False for name in self.agents}
         infos = {name: {} for name in self.agents}
 
-        # --- Step logic placeholder (implemented in issue #4) ---
+        # Collect current agent positions for occupancy checks
+        agent_positions = {
+            name: self.agent_states[name].pos for name in self.agents
+        }
 
-        # Check truncation
+        # --- Phase 1: Rotations (no conflicts) ---
+        for name in self.agents:
+            action = actions.get(name)
+            state = self.agent_states[name]
+            if action == self.actions.left:
+                state.dir = (state.dir - 1) % 4
+            elif action == self.actions.right:
+                state.dir = (state.dir + 1) % 4
+
+        # --- Phase 2: Forward movement with collision resolution ---
+        intended = {}  # agent_name -> intended new position
+        for name in self.agents:
+            action = actions.get(name)
+            state = self.agent_states[name]
+            if action == self.actions.forward:
+                fwd_pos = state.front_pos
+                # Check grid bounds
+                if not (0 <= fwd_pos[0] < self.width and 0 <= fwd_pos[1] < self.height):
+                    intended[name] = state.pos  # stay
+                    continue
+                fwd_cell = self.grid.get(*fwd_pos)
+                # Check if cell is passable
+                if fwd_cell is not None and not fwd_cell.can_overlap():
+                    intended[name] = state.pos  # blocked by object
+                    continue
+                intended[name] = fwd_pos
+            else:
+                intended[name] = state.pos  # not moving
+
+        # Resolve collisions
+        resolved = self._resolve_movements(intended, agent_positions)
+
+        # Commit movements
+        for name in self.agents:
+            self.agent_states[name].pos = resolved[name]
+
+        # Check goal/lava after movement
+        for name in self.agents:
+            state = self.agent_states[name]
+            cell = self.grid.get(*state.pos)
+            if cell is not None and cell.type == "goal":
+                terminations[name] = True
+                rewards[name] = self._reward(name)
+            elif cell is not None and cell.type == "lava":
+                terminations[name] = True
+                rewards[name] = 0.0
+
+        # --- Phase 3: Object interactions (deterministic order) ---
+        # Build set of positions occupied by agents (after movement)
+        occupied = {self.agent_states[n].pos for n in self.agents}
+
+        for name in self.agents:
+            action = actions.get(name)
+            state = self.agent_states[name]
+
+            if action not in (
+                self.actions.pickup,
+                self.actions.drop,
+                self.actions.toggle,
+            ):
+                continue
+
+            fwd_pos = state.front_pos
+            # Bounds check
+            if not (0 <= fwd_pos[0] < self.width and 0 <= fwd_pos[1] < self.height):
+                continue
+
+            # Check if another agent is in the forward cell
+            agent_in_front = fwd_pos in occupied and fwd_pos != state.pos
+
+            fwd_cell = self.grid.get(*fwd_pos)
+
+            if action == self.actions.pickup:
+                if (
+                    fwd_cell
+                    and fwd_cell.can_pickup()
+                    and state.carrying is None
+                    and not agent_in_front
+                ):
+                    state.carrying = fwd_cell
+                    state.carrying.cur_pos = (-1, -1)
+                    self.grid.set(fwd_pos[0], fwd_pos[1], None)
+
+            elif action == self.actions.drop:
+                if (
+                    state.carrying
+                    and fwd_cell is None
+                    and not agent_in_front
+                ):
+                    self.grid.set(fwd_pos[0], fwd_pos[1], state.carrying)
+                    state.carrying.cur_pos = fwd_pos
+                    state.carrying = None
+
+            elif action == self.actions.toggle:
+                if fwd_cell:
+                    # Compatibility shim for Door.toggle which reads env.carrying
+                    self.carrying = state.carrying
+                    fwd_cell.toggle(self, fwd_pos)
+                    self.carrying = None
+
+        # --- Phase 4: Truncation ---
         if self.step_count >= self.max_steps:
             for name in self.agents:
                 truncations[name] = True
@@ -261,6 +368,72 @@ class MultiGridEnv(ParallelEnv):
         ]
 
         return observations, rewards, terminations, truncations, infos
+
+    def _resolve_movements(
+        self,
+        intended: dict[str, tuple[int, int]],
+        current: dict[str, tuple[int, int]],
+    ) -> dict[str, tuple[int, int]]:
+        """Resolve simultaneous movement conflicts.
+
+        Rules:
+        1. If two+ agents intend to move to the same cell, none of them move.
+        2. If an agent intends to move to a cell occupied by another agent
+           that is NOT moving away, the moving agent stays.
+        3. If two agents would swap positions (A->B and B->A), neither moves.
+
+        Returns resolved positions for all agents.
+        """
+        resolved = dict(intended)
+        changed = True
+
+        # Iterate until stable (conflicts can cascade)
+        while changed:
+            changed = False
+
+            # Rule 1: Multiple agents targeting the same cell
+            target_counts: dict[tuple[int, int], list[str]] = {}
+            for name, pos in resolved.items():
+                target_counts.setdefault(pos, []).append(name)
+
+            for pos, agents_targeting in target_counts.items():
+                # Only conflict if multiple agents are MOVING to the same cell
+                movers = [n for n in agents_targeting if resolved[n] != current[n]]
+                if len(movers) >= 2:
+                    for name in movers:
+                        if resolved[name] != current[name]:
+                            resolved[name] = current[name]
+                            changed = True
+
+            # Rule 2: Moving into a cell occupied by a stationary agent
+            for name, target in resolved.items():
+                if target == current[name]:
+                    continue  # not moving
+                # Is there another agent whose resolved position is our target?
+                for other_name, other_target in resolved.items():
+                    if other_name == name:
+                        continue
+                    if other_target == target:
+                        # Other agent is (or will be) at our target
+                        resolved[name] = current[name]
+                        changed = True
+                        break
+
+            # Rule 3: Swap detection (A->B and B->A)
+            for name_a, target_a in resolved.items():
+                if target_a == current[name_a]:
+                    continue
+                for name_b, target_b in resolved.items():
+                    if name_b == name_a:
+                        continue
+                    if target_b == current[name_b]:
+                        continue
+                    if target_a == current[name_b] and target_b == current[name_a]:
+                        resolved[name_a] = current[name_a]
+                        resolved[name_b] = current[name_b]
+                        changed = True
+
+        return resolved
 
     def render(self) -> np.ndarray | None:
         """Render the environment. Full implementation in issue #6."""
