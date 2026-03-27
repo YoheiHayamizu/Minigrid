@@ -5,6 +5,7 @@ from minigrid.multigrid.multigrid_env import MultiGridEnv
 
 __all__ = [
     "AgentState",
+    "AgentObj",
     "AGENT_COLORS",
     "MultiGridEnv",
 ]
