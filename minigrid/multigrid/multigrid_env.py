@@ -19,6 +19,7 @@ from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Point, WorldObj
 from minigrid.multigrid.agent import AGENT_COLORS, AgentObj, AgentState
+from minigrid.multigrid.rendering import render_agent_tile
 
 T = TypeVar("T")
 
@@ -436,8 +437,129 @@ class MultiGridEnv(ParallelEnv):
         return resolved
 
     def render(self) -> np.ndarray | None:
-        """Render the environment. Full implementation in issue #6."""
-        return None
+        """Render the environment."""
+        img = self.get_frame(self.highlight, self.tile_size)
+
+        if self.render_mode == "human":
+            img_transposed = np.transpose(img, axes=(1, 0, 2))
+            if self.render_size is None:
+                self.render_size = img_transposed.shape[:2]
+            if self.window is None:
+                pygame.init()
+                pygame.display.init()
+                self.window = pygame.display.set_mode(
+                    (self.screen_size, self.screen_size)
+                )
+                pygame.display.set_caption("multigrid")
+            if self.clock is None:
+                self.clock = pygame.time.Clock()
+            surf = pygame.surfarray.make_surface(img_transposed)
+
+            # Background with mission text
+            offset = surf.get_size()[0] * 0.1
+            bg = pygame.Surface(
+                (int(surf.get_size()[0] + offset), int(surf.get_size()[1] + offset))
+            )
+            bg.convert()
+            bg.fill((255, 255, 255))
+            bg.blit(surf, (offset / 2, 0))
+
+            bg = pygame.transform.smoothscale(bg, (self.screen_size, self.screen_size))
+
+            font_size = 22
+            text = self.mission
+            font = pygame.freetype.SysFont(pygame.font.get_default_font(), font_size)
+            text_rect = font.get_rect(text, size=font_size)
+            text_rect.center = bg.get_rect().center
+            text_rect.y = bg.get_height() - font_size * 1.5
+            font.render_to(bg, text_rect, text, size=font_size)
+
+            self.window.blit(bg, (0, 0))
+            pygame.event.pump()
+            self.clock.tick(self.metadata["render_fps"])
+            pygame.display.flip()
+
+        elif self.render_mode == "rgb_array":
+            return img
+
+    def get_frame(
+        self,
+        highlight: bool = True,
+        tile_size: int = TILE_PIXELS,
+    ) -> np.ndarray:
+        """Get an RGB frame of the full environment."""
+        return self.get_full_render(highlight, tile_size)
+
+    def get_full_render(self, highlight: bool, tile_size: int) -> np.ndarray:
+        """Render the full grid with all agents as colored triangles."""
+        # Compute highlight mask (union of all agents' visible areas)
+        highlight_mask = np.zeros(shape=(self.width, self.height), dtype=bool)
+
+        if highlight:
+            for name, state in self.agent_states.items():
+                if not state.is_active:
+                    continue
+                agent_highlight = self._compute_agent_highlight(state)
+                highlight_mask |= agent_highlight
+
+        # Render grid without any agents
+        img = self.grid.render(
+            tile_size,
+            agent_pos=(-1, -1),
+            agent_dir=None,
+            highlight_mask=highlight_mask if highlight else None,
+        )
+
+        # Overlay each agent's colored triangle
+        for name, state in self.agent_states.items():
+            if not state.is_active:
+                continue
+            render_agent_tile(img, state.pos, state.dir, state.color, tile_size)
+
+        return img
+
+    def _compute_agent_highlight(self, state: AgentState) -> np.ndarray:
+        """Compute the highlight mask for a single agent's visible area."""
+        highlight = np.zeros(shape=(self.width, self.height), dtype=bool)
+
+        view_size = self.agent_view_size
+        topX, topY, _, _ = self._get_view_exts(state.pos, state.dir, view_size)
+
+        # Compute visibility in agent's local view
+        # Slice the grid for this agent's view
+        view_grid = self.grid.slice(topX, topY, view_size, view_size)
+        for _ in range(state.dir + 1):
+            view_grid = view_grid.rotate_left()
+
+        if not self.see_through_walls:
+            vis_mask = view_grid.process_vis(
+                agent_pos=(view_size // 2, view_size - 1)
+            )
+        else:
+            vis_mask = np.ones(shape=(view_size, view_size), dtype=bool)
+
+        # Map visible cells back to world coordinates
+        dir_vec = DIR_TO_VEC[state.dir]
+        dx, dy = int(dir_vec[0]), int(dir_vec[1])
+        right_vec = np.array((-dy, dx))
+        rx, ry = int(right_vec[0]), int(right_vec[1])
+
+        top_left = (
+            state.pos[0] + dx * (view_size - 1) - rx * (view_size // 2),
+            state.pos[1] + dy * (view_size - 1) - ry * (view_size // 2),
+        )
+
+        for vis_j in range(view_size):
+            for vis_i in range(view_size):
+                if not vis_mask[vis_i, vis_j]:
+                    continue
+                abs_i = top_left[0] - dx * vis_j + rx * vis_i
+                abs_j = top_left[1] - dy * vis_j + ry * vis_i
+
+                if 0 <= abs_i < self.width and 0 <= abs_j < self.height:
+                    highlight[abs_i, abs_j] = True
+
+        return highlight
 
     def close(self):
         """Close the rendering window."""
