@@ -1,8 +1,8 @@
 ---
 name: multi-agent
-status: backlog
+status: completed
 created: 2026-03-25T23:12:48Z
-progress: 80%
+progress: 100%
 prd: .claude/prds/multi-agent.md
 github: https://github.com/YoheiHayamizu/Minigrid/issues/1
 ---
